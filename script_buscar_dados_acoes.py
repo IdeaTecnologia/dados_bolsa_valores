@@ -1,5 +1,6 @@
 from datetime import datetime
 import time
+import os
 import pytz
 from bs4 import BeautifulSoup
 import json
@@ -232,11 +233,7 @@ for acao in acoes:
     dados_acoes.append(dados_combinados)
 
 
-# Salva na área de trabalho
-# desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop')
-# json_path = os.path.join(desktop_path, 'investbr.json')
-
-
+# Salva o arquivo JSON com os dados extraídos no diretório do script
 json_path = 'dados_acoes.json'
 
 with open(json_path, 'w', encoding='utf-8') as json_file:
