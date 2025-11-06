@@ -13,7 +13,7 @@ jobs:
         with:
           python-version: "3.10"
       - run: pip install -r requirements.txt
-      - run: python script_investbr.py
+      - run: python script_buscar_dados_acoes.py
       - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Actions"
