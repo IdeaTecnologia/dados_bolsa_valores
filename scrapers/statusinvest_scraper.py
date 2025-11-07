@@ -1,6 +1,8 @@
+# statusinvest_scraper.py
+
 import time
 from bs4 import BeautifulSoup
-from curl_cffi import requests as curl_requests
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 from utils.normalization import normalize_numeric_value
 
 STATUSINVEST_INDICATORS_MAP = {
@@ -70,16 +72,7 @@ class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
         self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
-        
-        # Status invest tem mais proteções contra scraping, então cabeçalhos mais completos são necessários
-        self.headers = {
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Cache-Control": "max-age=0",
-            "Referer": "https://www.google.com/",
-            "Upgrade-Insecure-Requests": "1",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-        }
+        self.user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
@@ -98,88 +91,113 @@ class StatusInvestScraper:
                 dados[key] = normalized_value
 
     def fetch_data(self):
-        # Inicializa o dicionário com todas as chaves possíveis e valor None.
         all_keys = self._get_all_possible_keys()
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
-        # Garante que o campo de erro sempre exista.
         dados["erro_statusinvest"] = ""
 
+        html_content = None
         max_tentativas = 3
         ultimo_erro = ""
+
         for tentativa in range(1, max_tentativas + 1):
             try:
-                time.sleep(1 * tentativa)
-                response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome110", timeout=20)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-                # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO
-                
-                # 1. Bloco Superior
-                for top_info in soup.select('.top-info'):
-                    for info_item in top_info.find_all('div', class_='info'):
-                        title_elem = info_item.find('h3', class_='title')
-                        value_elem = info_item.find('strong', class_='value')
-                        if title_elem and value_elem:
-                            title = title_elem.get_text(strip=True)
-                            if 'Liquidez' in title: title = "Liquidez média diária"
-                            
-                            if title in STATUSINVEST_INDICATORS_MAP:
-                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                self._process_and_store_data(dados, key, value_elem.text)
-
-                # 2. Seção de Indicadores Principais
-                if indicators_section := soup.select_one('#indicators-section'):
-                    for item in indicators_section.select('.indicator-today-container .item'):
-                        title_elem = item.find('h3', class_='title')
-                        value_elem = item.find('strong', class_='value')
-                        if title_elem and value_elem:
-                            title = title_elem.get_text(strip=True)
-                            if title in STATUSINVEST_INDICATORS_MAP:
-                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                overwrite = key != "statusInvest_dy_percentual"
-                                self._process_and_store_data(dados, key, value_elem.text, overwrite=overwrite)
-
-                # 3. Informações da Empresa
-                if company_section := soup.select_one('#company-section'):
-                    for info_div in company_section.select('.top-info .info'):
-                        value_elem = info_div.find('strong', class_='value')
-                        if not value_elem: continue
-                        
-                        raw_value = value_elem.get_text(strip=True)
-                        title_elem = info_div.select_one('h3.title span') or \
-                                     info_div.select_one('a h3.title') or \
-                                     info_div.find('h3', class_='title')
-                        
-                        if title_elem:
-                            title = title_elem.get_text(strip=True)
-                            if title in STATUSINVEST_INDICATORS_MAP:
-                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                self._process_and_store_data(dados, key, raw_value)
+                print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest usando Playwright...")
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    context = browser.new_context(user_agent=self.user_agent)
+                    page = context.new_page()
                     
-                    # 4. Outras Infos
-                    if other_info := company_section.find('div', class_='company-other-info'):
-                        if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
-                            if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
-                                self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
-                        
-                        if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
-                            if container := atuacao_div.find_next_sibling('div', class_='scroll'):
-                                for item in container.find_all('div', class_='item'):
-                                    if strong := item.find('strong'):
-                                        if a_tag := item.find('a'):
-                                            title, value = strong.get_text(strip=True), a_tag.get_text(strip=True)
-                                            if title in STATUSINVEST_INDICATORS_MAP:
-                                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                                self._process_and_store_data(dados, key, value)
-                # Se chegou até aqui, a extração foi bem-sucedida.
-                return dados
+                    # Navega para a página com um timeout generoso
+                    page.goto(self.url, timeout=60000, wait_until='domcontentloaded')
+                    
+                    # Espera por um elemento chave que indica que a página principal foi carregada
+                    page.wait_for_selector('#main-2', timeout=45000)
+                    
+                    html_content = page.content()
+                    browser.close()
+                
+                # Se o conteúdo foi obtido com sucesso, sai do loop de tentativas
+                break
 
+            except PlaywrightTimeoutError:
+                ultimo_erro = "TimeoutError: A página demorou muito para carregar ou o seletor não foi encontrado."
+                print(f"Tentativa {tentativa} falhou para {self.ticker}: {ultimo_erro}")
             except Exception as e:
-                print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest falhou: {e}")
                 ultimo_erro = str(e)
+                print(f"Tentativa {tentativa} falhou para {self.ticker}: {ultimo_erro}")
+            
+            time.sleep(2) # Pequeno intervalo entre tentativas
+
+        # Se após todas as tentativas o conteúdo não foi obtido, preenche o erro e retorna
+        if not html_content:
+            dados["erro_statusinvest"] = f"Status Invest: Falha ao carregar a página após {max_tentativas} tentativas: {ultimo_erro}"
+            return dados
+
+        try:
+            # A partir daqui, usamos a mesma lógica de parsing de antes
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # 1. Bloco Superior
+            for top_info in soup.select('.top-info'):
+                for info_item in top_info.find_all('div', class_='info'):
+                    title_elem = info_item.find('h3', class_='title')
+                    value_elem = info_item.find('strong', class_='value')
+                    if title_elem and value_elem:
+                        title = title_elem.get_text(strip=True)
+                        if 'Liquidez' in title: title = "Liquidez média diária"
+                        
+                        if title in STATUSINVEST_INDICATORS_MAP:
+                            key = STATUSINVEST_INDICATORS_MAP[title]
+                            self._process_and_store_data(dados, key, value_elem.text)
+
+            # 2. Seção de Indicadores Principais
+            if indicators_section := soup.select_one('#indicators-section'):
+                for item in indicators_section.select('.indicator-today-container .item'):
+                    title_elem = item.find('h3', class_='title')
+                    value_elem = item.find('strong', class_='value')
+                    if title_elem and value_elem:
+                        title = title_elem.get_text(strip=True)
+                        if title in STATUSINVEST_INDICATORS_MAP:
+                            key = STATUSINVEST_INDICATORS_MAP[title]
+                            overwrite = key != "statusInvest_dy_percentual"
+                            self._process_and_store_data(dados, key, value_elem.text, overwrite=overwrite)
+
+            # 3. Informações da Empresa
+            if company_section := soup.select_one('#company-section'):
+                for info_div in company_section.select('.top-info .info'):
+                    value_elem = info_div.find('strong', class_='value')
+                    if not value_elem: continue
+                    
+                    raw_value = value_elem.get_text(strip=True)
+                    title_elem = info_div.select_one('h3.title span') or \
+                                 info_div.select_one('a h3.title') or \
+                                 info_div.find('h3', class_='title')
+                    
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        if title in STATUSINVEST_INDICATORS_MAP:
+                            key = STATUSINVEST_INDICATORS_MAP[title]
+                            self._process_and_store_data(dados, key, raw_value)
+                
+                # 4. Outras Infos
+                if other_info := company_section.find('div', class_='company-other-info'):
+                    if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
+                        if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
+                            self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
+                    
+                    if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
+                        if container := atuacao_div.find_next_sibling('div', class_='scroll'):
+                            for item in container.find_all('div', class_='item'):
+                                if strong := item.find('strong'):
+                                    if a_tag := item.find('a'):
+                                        title, value = strong.get_text(strip=True), a_tag.get_text(strip=True)
+                                        if title in STATUSINVEST_INDICATORS_MAP:
+                                            key = STATUSINVEST_INDICATORS_MAP[title]
+                                            self._process_and_store_data(dados, key, value)
         
-        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
-        dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
+        except Exception as e:
+            dados["erro_statusinvest"] = f"Status Invest: Página carregada, mas falha ao extrair dados: {e}"
+            print(dados["erro_statusinvest"])
+
         return dados
