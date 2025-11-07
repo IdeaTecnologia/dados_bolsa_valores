@@ -76,11 +76,14 @@ class StatusInvestScraper:
         # Agora, criamos uma instância do scraper. Ele gerencia os headers e o desafio JS.
         # A opção 'browser' ajuda a simular um navegador específico, o que é sempre uma boa prática.
         self.scraper = cloudscraper.create_scraper(
+            interpreter='nodejs',  # Usa o motor Node.js nativo (muito mais rápido)
+            delay=10,              # Um delay generoso para garantir que o desafio resolva
             browser={
                 'browser': 'chrome',
                 'platform': 'windows',
                 'mobile': False
-            }
+            },
+            debug=True # Mantenha True para a primeira execução no Actions para ver os logs!
         )
 
     def _get_all_possible_keys(self):

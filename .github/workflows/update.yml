@@ -19,6 +19,12 @@ jobs:
         with:
           python-version: "3.10"
 
+
+      - name: Set up Node.js for cloudscraper
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       # Instalaçao de dependências
       - name: Install dependencies
         run: pip install -r requirements.txt
@@ -30,9 +36,18 @@ jobs:
       # Commit and push alterações no repositório
       - name: Commit and push changes
         run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
+          # Configura o usuário do Git para o bot da Action
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions-bot@github.com"
+          
+          # Adiciona o arquivo de dados para ser verificado
           git add dados_acoes.json
-          # Esta linha extra evita um erro caso o script rode sem que haja mudanças no arquivo JSON
-          git diff-index --quiet HEAD || git commit -m "Atualização automática $(date +'%d/%m/%Y %H:%M')"
-          git push
+          
+          # Verifica se há mudanças no arquivo. Se houver, faz o commit e o push.
+          # Isso evita commits vazios e erros caso o arquivo não seja alterado.
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "📊 Atualização automática dos dados das ações ($(date +'%d/%m/%Y %H:%M'))"
+            git push
+          else
+            echo "Nenhuma mudança nos dados das ações para commitar."
+          fi
