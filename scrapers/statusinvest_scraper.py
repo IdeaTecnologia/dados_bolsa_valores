@@ -72,9 +72,13 @@ class StatusInvestScraper:
         self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
         self.headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"}
 
+    def _get_all_possible_keys(self):
+        """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
+        return list(STATUSINVEST_INDICATORS_MAP.values())
+
     def _process_and_store_data(self, dados, key, raw_value, overwrite=True):
         """Função auxiliar para normalizar e armazenar dados."""
-        if not overwrite and key in dados:
+        if not overwrite and (key in dados and dados[key] is not None):
             return
 
         if key in NON_NUMERIC_KEYS:
@@ -85,8 +89,15 @@ class StatusInvestScraper:
                 dados[key] = normalized_value
 
     def fetch_data(self):
-        dados = {"ticker": self.ticker}
+        # Inicializa o dicionário com todas as chaves possíveis e valor None.
+        all_keys = self._get_all_possible_keys()
+        dados = {key: None for key in all_keys}
+        dados["ticker"] = self.ticker
+        # Garante que o campo de erro sempre exista.
+        dados["erro_statusinvest"] = ""
+
         max_tentativas = 3
+        ultimo_erro = ""
         for tentativa in range(1, max_tentativas + 1):
             try:
                 time.sleep(1 * tentativa)
@@ -96,14 +107,13 @@ class StatusInvestScraper:
 
                 # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO
                 
-                # 1. Bloco Superior (Cotação, Min/Max, DY, Valorização, Liquidez)
+                # 1. Bloco Superior
                 for top_info in soup.select('.top-info'):
                     for info_item in top_info.find_all('div', class_='info'):
                         title_elem = info_item.find('h3', class_='title')
                         value_elem = info_item.find('strong', class_='value')
                         if title_elem and value_elem:
                             title = title_elem.get_text(strip=True)
-                            # Trata o caso especial da liquidez
                             if 'Liquidez' in title: title = "Liquidez média diária"
                             
                             if title in STATUSINVEST_INDICATORS_MAP:
@@ -119,11 +129,10 @@ class StatusInvestScraper:
                             title = title_elem.get_text(strip=True)
                             if title in STATUSINVEST_INDICATORS_MAP:
                                 key = STATUSINVEST_INDICATORS_MAP[title]
-                                # Não sobrescreve o DY já pego no bloco superior
                                 overwrite = key != "statusInvest_dy_percentual"
                                 self._process_and_store_data(dados, key, value_elem.text, overwrite=overwrite)
 
-                # 3. Informações da Empresa (Balanço, Valor de Mercado, Free Float, etc.)
+                # 3. Informações da Empresa
                 if company_section := soup.select_one('#company-section'):
                     for info_div in company_section.select('.top-info .info'):
                         value_elem = info_div.find('strong', class_='value')
@@ -140,14 +149,12 @@ class StatusInvestScraper:
                                 key = STATUSINVEST_INDICATORS_MAP[title]
                                 self._process_and_store_data(dados, key, raw_value)
                     
-                    # 4. Outras Infos (Tag Along, Setor, etc.)
+                    # 4. Outras Infos
                     if other_info := company_section.find('div', class_='company-other-info'):
-                        # Tag Along
                         if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
                             if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
                                 self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
                         
-                        # Setor, Subsetor, Segmento
                         if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
                             if container := atuacao_div.find_next_sibling('div', class_='scroll'):
                                 for item in container.find_all('div', class_='item'):
@@ -157,11 +164,13 @@ class StatusInvestScraper:
                                             if title in STATUSINVEST_INDICATORS_MAP:
                                                 key = STATUSINVEST_INDICATORS_MAP[title]
                                                 self._process_and_store_data(dados, key, value)
+                # Se chegou até aqui, a extração foi bem-sucedida.
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest falhou: {e}")
                 ultimo_erro = str(e)
         
+        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
         dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
         return dados

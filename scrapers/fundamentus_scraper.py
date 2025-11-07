@@ -82,9 +82,24 @@ class FundamentusScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
         }
 
+    def _get_all_possible_keys(self):
+        """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
+        keys = set(FUNDAMENTUS_INDICATORS_MAP.values())
+        keys.add("fundamentus_oscilacao_ano_atual_percentual")
+        for i in range(1, 6):
+            keys.add(f"fundamentus_oscilacao_ano_menos_{i}_percentual")
+        return list(keys)
+
     def fetch_data(self):
-        dados = {"ticker": self.ticker}
+        # Inicializa o dicionário com todas as chaves possíveis e valor None.
+        all_keys = self._get_all_possible_keys()
+        dados = {key: None for key in all_keys}
+        dados["ticker"] = self.ticker
+        # Garante que o campo de erro sempre exista.
+        dados["erro_fundamentus"] = ""
+        
         max_tentativas = 3
+        ultimo_erro = ""
             
         for tentativa in range(max_tentativas):
             try:
@@ -109,16 +124,10 @@ class FundamentusScraper:
                                 value_element = value_cell.find('span') or value_cell
                                 raw_value = (value_element.find('a').get_text(strip=True) if value_element.find('a') 
                                              else value_element.get_text(strip=True)).strip()
-
-                                # --- Início da Lógica de Normalização ---
                                 
-                                # Processa indicadores principais
                                 if label_text in FUNDAMENTUS_INDICATORS_MAP:
                                     key = FUNDAMENTUS_INDICATORS_MAP[label_text]
-                                    
-                                    # Lógica para não sobrescrever dados do DRE (ex: Receita 12m vs 3m)
-                                    # Apenas insere se a chave não existir
-                                    if key not in dados:
+                                    if key not in dados or dados[key] is None:
                                         if key in NON_NUMERIC_KEYS:
                                             dados[key] = raw_value
                                         else:
@@ -126,7 +135,6 @@ class FundamentusScraper:
                                             if normalized_value is not None:
                                                 dados[key] = normalized_value
                                 
-                                # Processa oscilações anuais
                                 if label_text.isdigit():
                                     ano = int(label_text)
                                     diff_ano = ano_atual - ano
@@ -138,13 +146,10 @@ class FundamentusScraper:
                                         elif 1 <= diff_ano <= 5:
                                             dados[f"fundamentus_oscilacao_ano_menos_{diff_ano}_percentual"] = normalized_value
                                 
-                                # --- Fim da Lógica de Normalização ---
-                                
                                 i += 2
                                 continue
                             i += 1
                 
-                # Processa dados do DRE (últimos 3 meses)
                 dre_header = soup.find('td', class_='nivel1', string='Dados demonstrativos de resultados')
                 if dre_header:
                     dre_table = dre_header.find_parent('table')
@@ -162,10 +167,15 @@ class FundamentusScraper:
                                 if normalized_value is not None:
                                     dados[key] = normalized_value
                 
+                # Se a extração foi bem-sucedida, sai do loop de tentativas
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa+1} para {self.ticker} no Fundamentus falhou: {e}")
                 ultimo_erro = str(e)
         
-        return {"ticker": self.ticker, "erro_fundamentus": f"Fundamentus: Falha após {max_tentativas} tentativas: {ultimo_erro}"}
+        # Se todas as tentativas falharem, preenche a mensagem de erro e retorna o dicionário completo.
+        if ultimo_erro:
+            dados["erro_fundamentus"] = f"Fundamentus: Falha após {max_tentativas} tentativas: {ultimo_erro}"
+            
+        return dados

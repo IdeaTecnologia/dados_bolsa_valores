@@ -4,7 +4,10 @@ from utils.listaticker import ListaTicker
 
 def main():
     lista_provider = ListaTicker()
-    acoes_a_consultar = lista_provider.obter_lista_ticker()
+    # acoes_a_consultar = lista_provider.obter_lista_ticker()
+
+    # Apenas para testes rápidos, descomente a linha abaixo:
+    acoes_a_consultar = ["ABEV3","ITSA4","EGIE3","FLRY3"]
 
     # VERIFICA SE A LISTA FOI CARREGADA COM SUCESSO
     if not acoes_a_consultar:

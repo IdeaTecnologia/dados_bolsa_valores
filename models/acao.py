@@ -26,13 +26,13 @@ class Acao:
 
         # Combina os dicionários de dados
         dados_combinados = {
+            "ticker": self.ticker,
             **dados_inv10,
             **dados_fund,
             **dados_statusinvest,
             **dados_investsite_passivo,
-            **dados_investsite_indicadores  # <-- ADICIONE ESTA LINHA
+            **dados_investsite_indicadores
         }
-        dados_combinados["ticker"] = self.ticker
 
         # Adiciona timestamp
         brasilia_tz = pytz.timezone('America/Sao_Paulo')

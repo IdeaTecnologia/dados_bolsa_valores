@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
 from utils.normalization import normalize_numeric_value
 
-# Não há percentuais
 INVESTSITE_PASSIVO_MAP = {
     "Passivo Total": "investsitepassivo_passivo_total",
     "Passivo Circulante": "investsitepassivo_passivo_circulante",
@@ -75,9 +74,20 @@ class InvestSitePassivoScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
         }
 
+    def _get_all_possible_keys(self):
+        """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
+        return list(INVESTSITE_PASSIVO_MAP.values())
+
     def fetch_data(self):
-        dados = {"ticker": self.ticker}
+        # Inicializa o dicionário com todas as chaves possíveis e valor None.
+        all_keys = self._get_all_possible_keys()
+        dados = {key: None for key in all_keys}
+        dados["ticker"] = self.ticker
+        # Garante que o campo de erro sempre exista.
+        dados["erro_investsitepassivo"] = ""
+
         max_tentativas = 3
+        ultimo_erro = ""
         
         for tentativa in range(max_tentativas):
             try:
@@ -88,13 +98,11 @@ class InvestSitePassivoScraper:
 
                 table = soup.find('table', id='balanco_empresa_itr')
                 if not table:
-                    dados["erro_investsitepassivo"] = "Tabela de balanço patrimonial não encontrada."
-                    return dados
+                    raise Exception("Tabela de balanço patrimonial não encontrada.")
 
                 tbody = table.find('tbody')
                 if not tbody:
-                    dados["erro_investsitepassivo"] = "Corpo da tabela de balanço não encontrado."
-                    return dados
+                    raise Exception("Corpo da tabela de balanço não encontrado.")
 
                 # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO
                 for row in tbody.find_all('tr'):
@@ -105,20 +113,19 @@ class InvestSitePassivoScraper:
 
                         if raw_label in INVESTSITE_PASSIVO_MAP:
                             key = INVESTSITE_PASSIVO_MAP[raw_label]
-                            
-                            # Normaliza o valor base usando a função utilitária
                             base_value = normalize_numeric_value(raw_value)
                             
-                            # Adiciona o valor apenas se a chave ainda não existir e se a normalização foi bem-sucedida
-                            if key not in dados and isinstance(base_value, (int, float)):
-                                # Aplica a regra de negócio específica do site: multiplicar por 1000
+                            if (key not in dados or dados[key] is None) and isinstance(base_value, (int, float)):
                                 final_value = int(base_value * 1000)
                                 dados[key] = final_value
                 
+                # Se a extração foi bem-sucedida, retorna os dados.
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa+1} para {self.ticker} no InvestSite (Passivo) falhou: {e}")
                 ultimo_erro = str(e)
         
-        return {"ticker": self.ticker, "erro_investsitepassivo": f"InvestSite (Passivo): Falha após {max_tentativas} tentativas: {ultimo_erro}"}
+        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
+        dados["erro_investsitepassivo"] = f"InvestSite (Passivo): Falha após {max_tentativas} tentativas: {ultimo_erro}"
+        return dados

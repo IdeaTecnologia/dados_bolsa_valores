@@ -113,9 +113,20 @@ class InvestSiteIndicadoresScraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
         }
 
+    def _get_all_possible_keys(self):
+        """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
+        return list(INVESTSITE_INDICADORES_MAP.values())
+
     def fetch_data(self):
-        dados = {"ticker": self.ticker}
+        # Inicializa o dicionário com todas as chaves possíveis e valor None.
+        all_keys = self._get_all_possible_keys()
+        dados = {key: None for key in all_keys}
+        dados["ticker"] = self.ticker
+        # Garante que o campo de erro sempre exista.
+        dados["erro_investsiteindicadores"] = ""
+
         max_tentativas = 3
+        ultimo_erro = ""
         
         for tentativa in range(max_tentativas):
             try:
@@ -126,14 +137,12 @@ class InvestSiteIndicadoresScraper:
 
                 tables = soup.select('table[id^="tabela_resumo_empresa"]')
                 if not tables:
-                    dados["erro_investsiteindicadores"] = "Nenhuma tabela de indicadores encontrada."
-                    return dados
+                    raise Exception("Nenhuma tabela de indicadores encontrada.")
 
                 # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO
                 for table in tables:
                     tbody = table.find('tbody')
-                    if not tbody:
-                        continue
+                    if not tbody: continue
                     
                     for row in tbody.find_all('tr'):
                         cells = row.find_all('td')
@@ -145,8 +154,7 @@ class InvestSiteIndicadoresScraper:
                             if label in INVESTSITE_INDICADORES_MAP:
                                 key = INVESTSITE_INDICADORES_MAP[label]
                                 
-                                # Adiciona o valor apenas se a chave ainda não existir
-                                if key not in dados:
+                                if key not in dados or dados[key] is None:
                                     if key in NON_NUMERIC_KEYS:
                                         dados[key] = raw_value
                                     else:
@@ -154,10 +162,13 @@ class InvestSiteIndicadoresScraper:
                                         if normalized_value is not None:
                                             dados[key] = normalized_value
                 
+                # Se a extração foi bem-sucedida, retorna os dados.
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa+1} para {self.ticker} no InvestSite (Indicadores) falhou: {e}")
                 ultimo_erro = str(e)
         
-        return {"ticker": self.ticker, "erro_investsiteindicadores": f"InvestSite (Indicadores): Falha após {max_tentativas} tentativas: {ultimo_erro}"}
+        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
+        dados["erro_investsiteindicadores"] = f"InvestSite (Indicadores): Falha após {max_tentativas} tentativas: {ultimo_erro}"
+        return dados

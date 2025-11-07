@@ -72,6 +72,13 @@ class Investidor10Scraper:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
         }
 
+    def _get_all_possible_keys(self):
+        """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
+        keys = set(INVESTIDOR10_INDICATORS_MAP.values())
+        keys.add("investidor10_cotacao")
+        keys.add("investidor10_variacao_12m_percentual")
+        return list(keys)
+
     def _process_and_store_data(self, dados, key, raw_value):
         """Função auxiliar para normalizar e armazenar dados."""
         if key in NON_NUMERIC_KEYS:
@@ -82,7 +89,12 @@ class Investidor10Scraper:
                 dados[key] = normalized_value
 
     def fetch_data(self):
-        dados = {"ticker": self.ticker}
+        # Inicializa o dicionário com todas as chaves possíveis e valor None.
+        all_keys = self._get_all_possible_keys()
+        dados = {key: None for key in all_keys}
+        dados["ticker"] = self.ticker
+        # Garante que o campo de erro sempre exista.
+        dados["erro_investidor10"] = ""
         
         try:
             response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome110", timeout=20)
@@ -124,7 +136,6 @@ class Investidor10Scraper:
             # 4. Extrai dados da seção "Sobre a Empresa"
             if about_section := soup.find("div", id="about-company"):
                 
-                # 4.1. Tabela de Informações Básicas (CNPJ, Fundação, etc.)
                 if basic_info_table := about_section.find("div", class_="basic_info"):
                     for row in basic_info_table.find_all("tr"):
                         cells = row.find_all("td")
@@ -135,7 +146,6 @@ class Investidor10Scraper:
                                 key = INVESTIDOR10_INDICATORS_MAP[title_text]
                                 self._process_and_store_data(dados, key, raw_value)
 
-                # 4.2. Tabela de Valores (Valor de Firma, Ativos, Free Float, etc.)
                 if info_table := about_section.find("div", id="table-indicators-company"):
                     for cell in info_table.find_all("div", class_="cell"):
                         title_element = cell.find('span', class_='title')
@@ -150,9 +160,10 @@ class Investidor10Scraper:
                             if title_text in INVESTIDOR10_INDICATORS_MAP:
                                 key = INVESTIDOR10_INDICATORS_MAP[title_text]
                                 self._process_and_store_data(dados, key, raw_value)
-            return dados
             
         except Exception as e:
+            error_message = f"Investidor10: {str(e)}"
             print(f"Erro ao buscar dados de {self.ticker} no Investidor10: {e}")
-            dados["erro_investidor10"] = f"Investidor10: {str(e)}"
-            return dados
+            dados["erro_investidor10"] = error_message
+        
+        return dados
