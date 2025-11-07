@@ -1,7 +1,7 @@
 import time
-import cloudscraper  # <-- ALTERAÇÃO: Importa a biblioteca cloudscraper
+import cloudscraper
 from bs4 import BeautifulSoup
-# from curl_cffi import requests as curl_requests # <-- ALTERAÇÃO: Linha removida
+# A importação 'utils.normalization' é mantida, assumindo que existe no seu projeto.
 from utils.normalization import normalize_numeric_value
 
 STATUSINVEST_INDICATORS_MAP = {
@@ -71,9 +71,25 @@ class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
         self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
-        self.headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"}
-        # <-- ALTERAÇÃO: Instancia o scraper para ser usado nas requisições
-        self.scraper = cloudscraper.create_scraper()
+        
+        # <-- MUDANÇA PRINCIPAL AQUI -->
+        # Criamos o scraper com uma identidade de navegador muito mais convincente.
+        # Isso simula um Chrome em um desktop com Windows e dá mais tempo
+        # para os desafios de Javascript serem resolvidos.
+        self.scraper = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'mobile': False
+            },
+            delay=10  # Aumenta o delay para 10 segundos para dar tempo em ambientes mais lentos
+        )
+        # O User-Agent agora é gerenciado pelo scraper, mas podemos definir um header de referência se quisermos.
+        self.headers = {
+            "User-Agent": self.scraper.headers["User-Agent"],
+            "Referer": "https://www.google.com/"
+        }
+
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
@@ -92,23 +108,26 @@ class StatusInvestScraper:
                 dados[key] = normalized_value
 
     def fetch_data(self):
-        # Inicializa o dicionário com todas as chaves possíveis e valor None.
         all_keys = self._get_all_possible_keys()
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
-        # Garante que o campo de erro sempre exista.
         dados["erro_statusinvest"] = ""
 
         max_tentativas = 3
         ultimo_erro = ""
         for tentativa in range(1, max_tentativas + 1):
             try:
+                # O delay principal já é tratado pelo cloudscraper na primeira visita
+                # mas um sleep entre tentativas ainda é uma boa prática.
                 time.sleep(1 * tentativa)
-                # <-- ALTERAÇÃO: Usa o self.scraper para fazer a requisição GET
-                # O cloudscraper cuidará de qualquer desafio do Cloudflare
+                
                 response = self.scraper.get(self.url, headers=self.headers, timeout=30)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
+
+                # Verifica se a página retornada é de erro ou vazia (sinal de bloqueio)
+                if soup.find("h1", string="Acesso Negado") or not soup.select_one('.top-info'):
+                    raise Exception("Acesso negado ou página inesperada recebida do Status Invest.")
 
                 # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO (permanece inalterada)
                 
@@ -169,13 +188,11 @@ class StatusInvestScraper:
                                             if title in STATUSINVEST_INDICATORS_MAP:
                                                 key = STATUSINVEST_INDICATORS_MAP[title]
                                                 self._process_and_store_data(dados, key, value)
-                # Se chegou até aqui, a extração foi bem-sucedida.
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest falhou: {e}")
                 ultimo_erro = str(e)
         
-        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
         dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
         return dados
