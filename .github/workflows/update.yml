@@ -38,3 +38,10 @@ jobs:
           # Adiciona um tratamento para não falhar se não houver mudanças
           git diff-index --quiet HEAD || git commit -m "Atualização automática $(date +'%d/%m/%Y %H:%M')"
           git push
+
+      - name: Upload error screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshots
+          path: error_screenshot_*.png
