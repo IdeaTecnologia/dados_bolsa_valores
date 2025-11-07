@@ -1,0 +1,18 @@
+[
+    {
+        "ticker": "ABEV3",
+        "erro_geral": "Falha no processamento principal: module 'curl_cffi.requests' has no attribute 'RequestException'"
+    },
+    {
+        "ticker": "ITSA4",
+        "erro_geral": "Falha no processamento principal: module 'curl_cffi.requests' has no attribute 'RequestException'"
+    },
+    {
+        "ticker": "EGIE3",
+        "erro_geral": "Falha no processamento principal: module 'curl_cffi.requests' has no attribute 'RequestException'"
+    },
+    {
+        "ticker": "FLRY3",
+        "erro_geral": "Falha no processamento principal: module 'curl_cffi.requests' has no attribute 'RequestException'"
+    }
+]
