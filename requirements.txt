@@ -1,6 +1,5 @@
 requests==2.31.0
 beautifulsoup4==4.12.2
 curl_cffi
-pytz==2024.1
+pytz==2.024.1
 lxml==4.9.3
-playwright
