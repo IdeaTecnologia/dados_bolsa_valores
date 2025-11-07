@@ -77,9 +77,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
 ]
 
-# Lista de browsers para impersonation
-BROWSERS = ["chrome110", "chrome107", "edge101", "safari15_5", "chrome104", "firefox110"]
-
 class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
@@ -97,13 +94,7 @@ class StatusInvestScraper:
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "none",
             "Sec-Fetch-User": "?1",
-            "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
         }
-        
-        # Inicializa sessão
-        self.session = curl_requests.Session()
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
@@ -234,27 +225,28 @@ class StatusInvestScraper:
         dados["ticker"] = self.ticker
         dados["erro_statusinvest"] = ""
 
-        max_tentativas = 5
+        max_tentativas = 3  # Reduzindo para 3 tentativas
         ultimo_erro = ""
         
         for tentativa in range(1, max_tentativas + 1):
             try:
-                # Delay exponencial com jitter
-                base_delay = 2 ** tentativa
-                jitter = random.uniform(0.5, 1.5)
-                delay = base_delay * jitter
+                # Delay progressivo
+                delay = tentativa * 2 + random.uniform(1, 3)
                 print(f"Tentativa {tentativa} para {self.ticker} - Aguardando {delay:.1f}s")
                 time.sleep(delay)
                 
-                # Prepara headers e browser para esta tentativa
+                # Prepara headers para esta tentativa
                 headers = self._get_dynamic_headers(tentativa)
-                current_browser = BROWSERS[tentativa % len(BROWSERS)]
+                
+                # Rotação de browsers
+                browsers = ["chrome110", "chrome107", "edge101", "safari15_5"]
+                current_browser = browsers[tentativa % len(browsers)]
                 
                 print(f"Usando User-Agent: {headers['User-Agent'][:50]}...")
-                print(f"Usando browser impersonation: {current_browser}")
+                print(f"Usando browser: {current_browser}")
                 
                 # Faz a requisição
-                response = self.session.get(
+                response = curl_requests.get(
                     self.url, 
                     headers=headers,
                     impersonate=current_browser,
@@ -295,11 +287,8 @@ class StatusInvestScraper:
                     ultimo_erro = f"Dados insuficientes ({extracted_count} campos)"
                     print(f"Dados insuficientes extraídos")
                     
-            except curl_requests.RequestException as e:
-                print(f"RequestException na tentativa {tentativa}: {e}")
-                ultimo_erro = f"Erro de requisição: {str(e)}"
-            except Exception as e:
-                print(f"Exception na tentativa {tentativa}: {e}")
+            except Exception as e:  # Captura todas as exceções
+                print(f"Erro na tentativa {tentativa}: {e}")
                 ultimo_erro = str(e)
         
         # Se chegou aqui, todas as tentativas falharam
