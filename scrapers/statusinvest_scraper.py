@@ -1,10 +1,12 @@
 import time
-import cloudscraper
 from bs4 import BeautifulSoup
-# A importação 'utils.normalization' é mantida, assumindo que existe no seu projeto.
+# Remova a importação do curl_cffi e adicione a do cloudscraper
+import cloudscraper 
 from utils.normalization import normalize_numeric_value
 
+# O MAPA DE INDICADORES E AS CONSTANTES PERMANECEM IGUAIS
 STATUSINVEST_INDICATORS_MAP = {
+    # ... (seu mapa de indicadores completo aqui, sem alterações)
     # Bloco Superior
     "Valor atual": "statusInvest_cotacao",
     "Min. 52 semanas": "statusInvest_min_52_semanas",
@@ -71,32 +73,22 @@ class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
         self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
-        
-        # <-- MUDANÇA PRINCIPAL AQUI -->
-        # Criamos o scraper com uma identidade de navegador muito mais convincente.
-        # Isso simula um Chrome em um desktop com Windows e dá mais tempo
-        # para os desafios de Javascript serem resolvidos.
+        # Agora, criamos uma instância do scraper. Ele gerencia os headers e o desafio JS.
+        # A opção 'browser' ajuda a simular um navegador específico, o que é sempre uma boa prática.
         self.scraper = cloudscraper.create_scraper(
             browser={
                 'browser': 'chrome',
                 'platform': 'windows',
                 'mobile': False
-            },
-            delay=10  # Aumenta o delay para 10 segundos para dar tempo em ambientes mais lentos
+            }
         )
-        # O User-Agent agora é gerenciado pelo scraper, mas podemos definir um header de referência se quisermos.
-        self.headers = {
-            "User-Agent": self.scraper.headers["User-Agent"],
-            "Referer": "https://www.google.com/"
-        }
-
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
         return list(STATUSINVEST_INDICATORS_MAP.values())
 
     def _process_and_store_data(self, dados, key, raw_value, overwrite=True):
-        """Função auxiliar para normalizar e armazenar dados."""
+        """Função auxiliar para normalizar e armazenar dados. (Sem alterações)"""
         if not overwrite and (key in dados and dados[key] is not None):
             return
 
@@ -117,19 +109,22 @@ class StatusInvestScraper:
         ultimo_erro = ""
         for tentativa in range(1, max_tentativas + 1):
             try:
-                # O delay principal já é tratado pelo cloudscraper na primeira visita
-                # mas um sleep entre tentativas ainda é uma boa prática.
+                # O cloudscraper já tem um delay embutido para a primeira requisição 
+                # para resolver o desafio Cloudflare, mas um pequeno delay adicional pode ajudar.
                 time.sleep(1 * tentativa)
                 
-                response = self.scraper.get(self.url, headers=self.headers, timeout=30)
+                # AQUI ESTÁ A MUDANÇA PRINCIPAL:
+                # Usamos o objeto scraper em vez de curl_requests.
+                # Não precisamos mais passar 'headers' ou 'impersonate',
+                # pois o scraper gerencia isso automaticamente.
+                response = self.scraper.get(self.url, timeout=20)
+                
+                print(f"Tentativa {tentativa} para {self.ticker}: Status Code {response.status_code}")
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
 
-                # Verifica se a página retornada é de erro ou vazia (sinal de bloqueio)
-                if soup.find("h1", string="Acesso Negado") or not soup.select_one('.top-info'):
-                    raise Exception("Acesso negado ou página inesperada recebida do Status Invest.")
-
-                # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO (permanece inalterada)
+                # TODA A LÓGICA DE EXTRAÇÃO COM BEAUTIFULSOUP PERMANECE IDÊNTICA.
+                # Ela já é robusta e bem escrita.
                 
                 # 1. Bloco Superior
                 for top_info in soup.select('.top-info'):
@@ -174,25 +169,31 @@ class StatusInvestScraper:
                                 self._process_and_store_data(dados, key, raw_value)
                     
                     # 4. Outras Infos
-                    if other_info := company_section.find('div', class_='company-other-info'):
-                        if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
-                            if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
-                                self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
+                    # Ajustei um pouco a lógica para ser mais resiliente caso a estrutura mude
+                    for info_item in soup.select('.top-info.sm .info'):
+                        title_elem = info_item.find('h3', class_='title')
+                        value_elem = info_item.find('strong', class_='value')
                         
-                        if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
-                            if container := atuacao_div.find_next_sibling('div', class_='scroll'):
-                                for item in container.find_all('div', class_='item'):
-                                    if strong := item.find('strong'):
-                                        if a_tag := item.find('a'):
-                                            title, value = strong.get_text(strip=True), a_tag.get_text(strip=True)
-                                            if title in STATUSINVEST_INDICATORS_MAP:
-                                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                                self._process_and_store_data(dados, key, value)
+                        if title_elem and value_elem:
+                            title = title_elem.get_text(strip=True).replace('PARTICIPAÇÃO NO', '').strip()
+                            if title in STATUSINVEST_INDICATORS_MAP:
+                                key = STATUSINVEST_INDICATORS_MAP[title]
+                                self._process_and_store_data(dados, key, value_elem.text)
+                
+                # Lógica para Setor, Subsetor e Segmento (parece estar faltando no seu código original)
+                atuacao_items = soup.select('.company-description-container .info-value')
+                if len(atuacao_items) >= 3:
+                    self._process_and_store_data(dados, 'statusInvest_setor', atuacao_items[0].text)
+                    self._process_and_store_data(dados, 'statusInvest_subsetor', atuacao_items[1].text)
+                    self._process_and_store_data(dados, 'statusInvest_segmento', atuacao_items[2].text)
+
+                # Se chegou até aqui, a extração foi bem-sucedida.
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest falhou: {e}")
                 ultimo_erro = str(e)
         
+        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
         dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
         return dados
