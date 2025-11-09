@@ -13,10 +13,10 @@ Proteções de StatusInvest:
 import time
 from bs4 import BeautifulSoup
 from seleniumbase import Driver
-from selenium.common.exceptions import TimeoutException # Importar exceção de Timeout
+from selenium.common.exceptions import TimeoutException
 from utils.normalization import normalize_numeric_value
 
-# Dicionários de mapeamento (sem alterações)
+# Dicionários de mapeamento permanecem os mesmos
 STATUSINVEST_INDICATORS_MAP = {
     # Bloco Superior
     "Valor atual": "statusInvest_cotacao",
@@ -70,57 +70,97 @@ class StatusInvestScraper:
         try:
             print(f"Iniciando scraper para {self.ticker} no StatusInvest...")
             driver = Driver(uc=True, headless=True, block_images=True)
-            
-            # Adiciona um timeout generoso para o carregamento inicial da página
-            driver.set_page_load_timeout(60)
+            driver.set_page_load_timeout(45) # Timeout para o carregamento inicial
 
             print(f"Acessando URL: {self.url}")
             driver.get(self.url)
-
-            # Lógica para lidar com o desafio Cloudflare
-            try:
-                print("Procurando por desafio Cloudflare (timeout de 15s)...")
-                iframe_selector = 'iframe[title="Widget containing a Cloudflare security challenge"]'
-                driver.wait_for_element(iframe_selector, timeout=15)
-                driver.switch_to.frame(iframe_selector)
-                driver.click('input[type="checkbox"]')
-                print(">>> Desafio Cloudflare encontrado e clicado! Aguardando redirecionamento...")
-                driver.switch_to.default_content()
-                time.sleep(5) # Espera extra para a página recarregar
-            except TimeoutException:
-                print("Nenhum desafio Cloudflare detectado, prosseguindo diretamente.")
             
-            print("Aguardando conteúdo principal da página (timeout de 30s)...")
-            driver.wait_for_element("#indicators-section", timeout=30)
+            # --- NOVA LÓGICA DE ESPERA ESTRATÉGICA PARA O CLOUDFLARE ---
+            time.sleep(5) # Pausa inicial para a página começar a carregar
+            if "Just a moment..." in driver.title:
+                print(">>> Página de desafio Cloudflare detectada. Aguardando a resolução automática (até 30 segundos)...")
+                # Apenas esperamos. O uc_mode do SeleniumBase deve resolver em segundo plano.
+                time.sleep(30)
+                
+            # Após a espera, verificamos se saímos da página de desafio
+            if "Just a moment..." in driver.title:
+                print("!!! ERRO: O scraper ainda está preso na página de desafio do Cloudflare após a espera.")
+                raise Exception("Cloudflare challenge not solved automatically")
+
+            print("Aguardando conteúdo principal da página (timeout de 20s)...")
+            driver.wait_for_element("#indicators-section", timeout=20)
             print(">>> Conteúdo principal encontrado. Iniciando extração.")
 
             page_source = driver.page_source
             soup = BeautifulSoup(page_source, 'html.parser')
             
-            # Lógica de extração (inalterada)
-            # ... (Toda a sua lógica de parsing com BeautifulSoup continua aqui)
+            # --- LÓGICA DE EXTRAÇÃO (INALTERADA) ---
+            # 1. Bloco Superior
+            for top_info in soup.select('.top-info'):
+                for info_item in top_info.find_all('div', class_='info'):
+                    title_elem = info_item.find('h3', class_='title')
+                    value_elem = info_item.find('strong', class_='value')
+                    if title_elem and value_elem:
+                        title = title_elem.get_text(strip=True)
+                        if 'Liquidez' in title: title = "Liquidez média diária"
+                        if title in STATUSINVEST_INDICATORS_MAP:
+                            key = STATUSINVEST_INDICATORS_MAP[title]
+                            self._process_and_store_data(dados, key, value_elem.text)
+
+            # 2. Seção de Indicadores Principais
+            if indicators_section := soup.select_one('#indicators-section'):
+                for item in indicators_section.select('.indicator-today-container .item'):
+                    title_elem = item.find('h3', class_='title')
+                    value_elem = item.find('strong', class_='value')
+                    if title_elem and value_elem:
+                        title = title_elem.get_text(strip=True)
+                        if title in STATUSINVEST_INDICATORS_MAP:
+                            key = STATUSINVEST_INDICATORS_MAP[title]
+                            overwrite = key != "statusInvest_dy_percentual"
+                            self._process_and_store_data(dados, key, value_elem.text, overwrite=overwrite)
+            
+            # 3. Informações da Empresa e Outras Infos (continua igual)
+            if company_section := soup.select_one('#company-section'):
+                for info_div in company_section.select('.top-info .info'):
+                    value_elem = info_div.find('strong', class_='value')
+                    if not value_elem: continue
+                    raw_value = value_elem.get_text(strip=True)
+                    title_elem = info_div.select_one('h3.title span') or info_div.select_one('a h3.title') or info_div.find('h3', class_='title')
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                        if title in STATUSINVEST_INDICATORS_MAP:
+                            key = STATUSINVEST_INDICATORS_MAP[title]
+                            self._process_and_store_data(dados, key, raw_value)
+                if other_info := company_section.find('div', class_='company-other-info'):
+                    if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
+                        if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
+                            self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
+                    if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
+                        if container := atuacao_div.find_next_sibling('div', class_='scroll'):
+                            for item in container.find_all('div', class_='item'):
+                                if strong := item.find('strong'):
+                                    if a_tag := item.find('a'):
+                                        title, value = strong.get_text(strip=True), a_tag.get_text(strip=True)
+                                        if title in STATUSINVEST_INDICATORS_MAP:
+                                            key = STATUSINVEST_INDICATORS_MAP[title]
+                                            self._process_and_store_data(dados, key, value)
             
             print(f"Extração para {self.ticker} concluída com sucesso.")
             return dados
 
-        except TimeoutException as te:
-            print(f"!!! ERRO DE TIMEOUT para {self.ticker}: A página ou um elemento chave não carregou a tempo. {te}")
-            dados["erro_statusinvest"] = f"Status Invest: Timeout - A página não carregou a tempo."
-            return dados
         except Exception as e:
             print(f"!!! ERRO INESPERADO para {self.ticker}: {e}")
-            dados["erro_statusinvest"] = f"Status Invest: Erro inesperado - {str(e)}"
+            dados["erro_statusinvest"] = f"Status Invest: Erro na automação - {str(e)}"
             return dados
         
         finally:
             if driver:
                 print(f"Finalizando scraper para {self.ticker}. Salvando artefatos de debug...")
                 try:
-                    # Garante que os artefatos sejam salvos para análise
                     driver.save_screenshot(f"{self.ticker}_screenshot.png")
                     with open(f"{self.ticker}_pagina.html", "w", encoding='utf-8') as f:
                         f.write(driver.page_source)
-                    print("Artefatos de debug salvos com sucesso.")
+                    print("Artefatos de debug salvos.")
                 except Exception as e:
                     print(f"!!! Falha ao salvar artefatos de debug para {self.ticker}: {e}")
                 driver.quit()
