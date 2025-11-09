@@ -19,26 +19,40 @@ jobs:
         with:
           python-version: "3.10"
 
+      # Instala o Google Chrome, dependência para o SeleniumBase rodar
       - name: Install Google Chrome
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
 
+      # Instala as dependências do Python, incluindo o SeleniumBase
       - name: Install dependencies
         run: pip install -r requirements.txt
       
+      # Instala o chromedriver, que o SeleniumBase usará para controlar o Chrome
       - name: Install SeleniumBase browser drivers
         run: seleniumbase install chromedriver
 
+      # Executa o script principal de scraping
       - name: Run Scraper
         run: python main.py
 
-      # Commit and push alterações no repositório
+      # Faz o upload dos arquivos de debug (screenshot e html) para análise
+      - name: Upload Artifacts for Debugging
+        if: always() # Garante que este passo rode mesmo se o 'Run Scraper' falhar
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-debug-artifacts
+          path: |
+            *_screenshot.png
+            *_pagina.html
+      
+      # Faz o commit e push do arquivo de dados atualizado
       - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           git add dados_acoes.json
-          # CORREÇÃO APLICADA AQUI: Uso de aspas duplas dentro do comando date
+          # Evita erro de commit se não houver mudanças no arquivo
           git diff-index --quiet HEAD || git commit -m "Atualização automática $(date "+%d/%m/%Y %H:%M")"
           git push

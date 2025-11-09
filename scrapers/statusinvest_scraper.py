@@ -1,3 +1,15 @@
+'''
+Pesquisar por python web scraping cloudflare
+
+Proteções de StatusInvest:
+1 Cloudflare Bot Management - Scripts da Cloudflare no cabeçalho
+2 Google Tag Manager - Múltiplos scripts de rastreamento
+3 Akamai Bot Protection - Scripts de proteção
+4 Fingerprinting de navegador - Diversos scripts coletando informações do client
+5 Request de origem - Verificação de cabeçalhos HTTP
+6 reCAPTCHA Enterprise - Proteção contra bots do Google
+'''
+
 import time
 from bs4 import BeautifulSoup
 from seleniumbase import Driver
@@ -70,7 +82,6 @@ class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
         self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
-        # O User-Agent agora será gerenciado pelo SeleniumBase
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
@@ -94,23 +105,28 @@ class StatusInvestScraper:
         dados["ticker"] = self.ticker
         dados["erro_statusinvest"] = ""
 
-        max_tentativas = 3
+        # Reduzido para 1 para acelerar o debug. Se funcionar, pode voltar para 3.
+        max_tentativas = 1
         ultimo_erro = ""
-        driver = None  # Inicializa o driver fora do loop
+        driver = None
 
         for tentativa in range(1, max_tentativas + 1):
             try:
-                # uc=True: Ativa o modo Undetected-Chromedriver para evitar detecção
-                # headless=True: Roda o navegador em segundo plano, sem interface gráfica (essencial para o GitHub Actions)
-                driver = Driver(uc=True, headless=True)
+                # Opções aprimoradas para simular um navegador real de forma mais convincente
+                driver = Driver(
+                    uc=True, 
+                    headless=True,
+                    agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
+                )
                 
                 print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest usando SeleniumBase...")
                 driver.get(self.url)
                 
-                # Aguarda um pouco para o JS da página carregar (se necessário)
-                time.sleep(3) 
+                # Espera inteligente: aguarda até 20 segundos pelo elemento chave da página
+                print("Aguardando o carregamento dinâmico da página...")
+                driver.wait_for_element("#indicators-section", timeout=20)
+                print("Página aparentemente carregada com sucesso.")
 
-                # Pega o HTML da página após a execução do JavaScript
                 page_source = driver.page_source
                 soup = BeautifulSoup(page_source, 'html.parser')
                 
@@ -173,8 +189,8 @@ class StatusInvestScraper:
                                             if title in STATUSINVEST_INDICATORS_MAP:
                                                 key = STATUSINVEST_INDICATORS_MAP[title]
                                                 self._process_and_store_data(dados, key, value)
-
-                # Se chegou até aqui, a extração foi bem-sucedida.
+                
+                print(f"Extração para {self.ticker} concluída com sucesso.")
                 return dados
 
             except Exception as e:
@@ -182,8 +198,16 @@ class StatusInvestScraper:
                 ultimo_erro = str(e)
             
             finally:
-                # Garante que o navegador seja fechado mesmo se ocorrer um erro
+                # Garante que os artefatos de debug sejam salvos e o navegador fechado
                 if driver:
+                    print(f"Salvando artefatos de debug para {self.ticker}...")
+                    try:
+                        driver.save_screenshot(f"{self.ticker}_screenshot.png")
+                        with open(f"{self.ticker}_pagina.html", "w", encoding='utf-8') as f:
+                            f.write(driver.page_source)
+                        print("Artefatos salvos.")
+                    except Exception as E:
+                        print(f"Erro ao salvar artefatos: {E}")
                     driver.quit()
         
         dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
