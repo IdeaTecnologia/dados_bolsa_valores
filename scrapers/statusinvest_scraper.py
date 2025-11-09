@@ -1,18 +1,6 @@
-'''
-Pesquisar por python web scraping cloudflare
-
-Proteções de StatusInvest:
-1 Cloudflare Bot Management - Scripts da Cloudflare no cabeçalho
-2 Google Tag Manager - Múltiplos scripts de rastreamento
-3 Akamai Bot Protection - Scripts de proteção
-4 Fingerprinting de navegador - Diversos scripts coletando informações do client
-5 Request de origem - Verificação de cabeçalhos HTTP
-6 reCAPTCHA Enterprise - Proteção contra bots do Google
-'''
-
 import time
 from bs4 import BeautifulSoup
-from curl_cffi import requests as curl_requests
+from seleniumbase import Driver
 from utils.normalization import normalize_numeric_value
 
 STATUSINVEST_INDICATORS_MAP = {
@@ -82,7 +70,7 @@ class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
         self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
-        self.headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"}
+        # O User-Agent agora será gerenciado pelo SeleniumBase
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
@@ -101,24 +89,33 @@ class StatusInvestScraper:
                 dados[key] = normalized_value
 
     def fetch_data(self):
-        # Inicializa o dicionário com todas as chaves possíveis e valor None.
         all_keys = self._get_all_possible_keys()
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
-        # Garante que o campo de erro sempre exista.
         dados["erro_statusinvest"] = ""
 
         max_tentativas = 3
         ultimo_erro = ""
+        driver = None  # Inicializa o driver fora do loop
+
         for tentativa in range(1, max_tentativas + 1):
             try:
-                time.sleep(1 * tentativa)
-                response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome110", timeout=20)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
-
-                # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO
+                # uc=True: Ativa o modo Undetected-Chromedriver para evitar detecção
+                # headless=True: Roda o navegador em segundo plano, sem interface gráfica (essencial para o GitHub Actions)
+                driver = Driver(uc=True, headless=True)
                 
+                print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest usando SeleniumBase...")
+                driver.get(self.url)
+                
+                # Aguarda um pouco para o JS da página carregar (se necessário)
+                time.sleep(3) 
+
+                # Pega o HTML da página após a execução do JavaScript
+                page_source = driver.page_source
+                soup = BeautifulSoup(page_source, 'html.parser')
+                
+                # --- A LÓGICA DE EXTRAÇÃO ABAIXO PERMANECE EXATAMENTE A MESMA ---
+
                 # 1. Bloco Superior
                 for top_info in soup.select('.top-info'):
                     for info_item in top_info.find_all('div', class_='info'):
@@ -176,13 +173,18 @@ class StatusInvestScraper:
                                             if title in STATUSINVEST_INDICATORS_MAP:
                                                 key = STATUSINVEST_INDICATORS_MAP[title]
                                                 self._process_and_store_data(dados, key, value)
+
                 # Se chegou até aqui, a extração foi bem-sucedida.
                 return dados
 
             except Exception as e:
                 print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest falhou: {e}")
                 ultimo_erro = str(e)
+            
+            finally:
+                # Garante que o navegador seja fechado mesmo se ocorrer um erro
+                if driver:
+                    driver.quit()
         
-        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
         dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
         return dados
