@@ -3,4 +3,4 @@ beautifulsoup4==4.12.2
 curl_cffi
 pytz==2024.1
 lxml==4.9.3
-cloudscraper-enhanced==3.0.0
+pydoll-python>=2.12.0

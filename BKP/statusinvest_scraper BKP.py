@@ -1,3 +1,15 @@
+'''
+Pesquisar por python web scraping cloudflare
+
+Proteções de StatusInvest:
+1 Cloudflare Bot Management - Scripts da Cloudflare no cabeçalho
+2 Google Tag Manager - Múltiplos scripts de rastreamento
+3 Akamai Bot Protection - Scripts de proteção
+4 Fingerprinting de navegador - Diversos scripts coletando informações do client
+5 Request de origem - Verificação de cabeçalhos HTTP
+6 reCAPTCHA Enterprise - Proteção contra bots do Google
+'''
+
 import time
 from bs4 import BeautifulSoup
 from curl_cffi import requests as curl_requests
