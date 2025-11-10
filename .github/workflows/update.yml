@@ -2,13 +2,13 @@ name: Atualizar Ações Diariamente
 
 on:
   schedule:
-    - cron: '0 23 * * *'  # 20h no horário de Brasília (UTC-3)
-  workflow_dispatch:      # Permite acionar manualmente
+    - cron: '0 23 * * *'
+  workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # Pode ser menor agora que não usamos navegador
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -20,17 +20,14 @@ jobs:
         with:
           python-version: "3.10"
 
-      # Instala as dependências do Python
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Executa o script de atualização, passando o segredo como variável de ambiente
       - name: Run Scraper
         env:
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          APIROAD_KEY: ${{ secrets.APIROAD_KEY }} # Chave de API armazenada nos segredos do repositório
         run: python main.py
       
-      # Faz o commit e push do arquivo de dados atualizado
       - name: Commit and push changes
         run: |
           git config --global user.name "GitHub Actions"
