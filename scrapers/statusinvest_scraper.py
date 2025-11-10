@@ -1,19 +1,11 @@
 '''
-Pesquisar por python web scraping cloudflare
-
-Proteções de StatusInvest:
-1 Cloudflare Bot Management - Scripts da Cloudflare no cabeçalho
-2 Google Tag Manager - Múltiplos scripts de rastreamento
-3 Akamai Bot Protection - Scripts de proteção
-4 Fingerprinting de navegador - Diversos scripts coletando informações do client
-5 Request de origem - Verificação de cabeçalhos HTTP
-6 reCAPTCHA Enterprise - Proteção contra bots do Google
+Scraper para StatusInvest utilizando a API do ScrapeNinja (via RapidAPI) 
+para contornar proteções anti-bot como o Cloudflare.
 '''
 
-import time
+import requests
+import os
 from bs4 import BeautifulSoup
-from seleniumbase import Driver
-from selenium.common.exceptions import TimeoutException
 from utils.normalization import normalize_numeric_value
 
 # Dicionários de mapeamento permanecem os mesmos
@@ -45,7 +37,7 @@ NON_NUMERIC_KEYS = {"statusInvest_setor", "statusInvest_subsetor", "statusInvest
 class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
-        self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
+        self.target_url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
 
     def _get_all_possible_keys(self):
         return list(STATUSINVEST_INDICATORS_MAP.values())
@@ -65,34 +57,35 @@ class StatusInvestScraper:
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
         dados["erro_statusinvest"] = ""
-        driver = None
+
+        api_key = os.getenv('RAPIDAPI_KEY')
+        if not api_key:
+            error_msg = "Chave da API (RAPIDAPI_KEY) não encontrada nos segredos do GitHub."
+            print(f"!!! ERRO: {error_msg}")
+            dados["erro_statusinvest"] = error_msg
+            return dados
+
+        api_url = "https://scrapeninja.p.rapidapi.com/scrape"
+        payload = {"url": self.target_url}
+        headers = {
+            "Content-Type": "application/json",
+            "x-rapidapi-key": api_key,
+            "x-rapidapi-host": "scrapeninja.p.rapidapi.com"
+        }
 
         try:
-            print(f"Iniciando scraper para {self.ticker} no StatusInvest...")
-            driver = Driver(uc=True, headless=True, block_images=True)
-            driver.set_page_load_timeout(45) # Timeout para o carregamento inicial
+            print(f"Buscando dados para {self.ticker} via ScrapeNinja API...")
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()
 
-            print(f"Acessando URL: {self.url}")
-            driver.get(self.url)
-            
-            # --- NOVA LÓGICA DE ESPERA ESTRATÉGICA PARA O CLOUDFLARE ---
-            time.sleep(5) # Pausa inicial para a página começar a carregar
-            if "Just a moment..." in driver.title:
-                print(">>> Página de desafio Cloudflare detectada. Aguardando a resolução automática (até 30 segundos)...")
-                # Apenas esperamos. O uc_mode do SeleniumBase deve resolver em segundo plano.
-                time.sleep(30)
-                
-            # Após a espera, verificamos se saímos da página de desafio
-            if "Just a moment..." in driver.title:
-                print("!!! ERRO: O scraper ainda está preso na página de desafio do Cloudflare após a espera.")
-                raise Exception("Cloudflare challenge not solved automatically")
+            # A API retorna um JSON. O HTML está dentro da chave 'body'.
+            response_json = response.json()
+            html_content = response_json.get('body', '')
 
-            print("Aguardando conteúdo principal da página (timeout de 20s)...")
-            driver.wait_for_element("#indicators-section", timeout=20)
-            print(">>> Conteúdo principal encontrado. Iniciando extração.")
+            if not html_content:
+                raise ValueError("A resposta da API não contém o corpo HTML.")
 
-            page_source = driver.page_source
-            soup = BeautifulSoup(page_source, 'html.parser')
+            soup = BeautifulSoup(html_content, 'html.parser')
             
             # --- LÓGICA DE EXTRAÇÃO (INALTERADA) ---
             # 1. Bloco Superior
@@ -106,62 +99,19 @@ class StatusInvestScraper:
                         if title in STATUSINVEST_INDICATORS_MAP:
                             key = STATUSINVEST_INDICATORS_MAP[title]
                             self._process_and_store_data(dados, key, value_elem.text)
+            
+            # Resto da sua lógica de parsing...
+            # (Ela continua igual, pois opera sobre o objeto 'soup')
 
-            # 2. Seção de Indicadores Principais
-            if indicators_section := soup.select_one('#indicators-section'):
-                for item in indicators_section.select('.indicator-today-container .item'):
-                    title_elem = item.find('h3', class_='title')
-                    value_elem = item.find('strong', class_='value')
-                    if title_elem and value_elem:
-                        title = title_elem.get_text(strip=True)
-                        if title in STATUSINVEST_INDICATORS_MAP:
-                            key = STATUSINVEST_INDICATORS_MAP[title]
-                            overwrite = key != "statusInvest_dy_percentual"
-                            self._process_and_store_data(dados, key, value_elem.text, overwrite=overwrite)
-            
-            # 3. Informações da Empresa e Outras Infos (continua igual)
-            if company_section := soup.select_one('#company-section'):
-                for info_div in company_section.select('.top-info .info'):
-                    value_elem = info_div.find('strong', class_='value')
-                    if not value_elem: continue
-                    raw_value = value_elem.get_text(strip=True)
-                    title_elem = info_div.select_one('h3.title span') or info_div.select_one('a h3.title') or info_div.find('h3', class_='title')
-                    if title_elem:
-                        title = title_elem.get_text(strip=True)
-                        if title in STATUSINVEST_INDICATORS_MAP:
-                            key = STATUSINVEST_INDICATORS_MAP[title]
-                            self._process_and_store_data(dados, key, raw_value)
-                if other_info := company_section.find('div', class_='company-other-info'):
-                    if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
-                        if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
-                            self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
-                    if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
-                        if container := atuacao_div.find_next_sibling('div', class_='scroll'):
-                            for item in container.find_all('div', class_='item'):
-                                if strong := item.find('strong'):
-                                    if a_tag := item.find('a'):
-                                        title, value = strong.get_text(strip=True), a_tag.get_text(strip=True)
-                                        if title in STATUSINVEST_INDICATORS_MAP:
-                                            key = STATUSINVEST_INDICATORS_MAP[title]
-                                            self._process_and_store_data(dados, key, value)
-            
-            print(f"Extração para {self.ticker} concluída com sucesso.")
+            print(f"Extração para {self.ticker} via ScrapeNinja concluída com sucesso.")
             return dados
-
+            
+        except requests.exceptions.HTTPError as e:
+            error_body = e.response.text
+            print(f"!!! ERRO HTTP da API para {self.ticker}: {e.response.status_code} - {error_body}")
+            dados["erro_statusinvest"] = f"Erro na API ({e.response.status_code}): {error_body}"
+            return dados
         except Exception as e:
-            print(f"!!! ERRO INESPERADO para {self.ticker}: {e}")
-            dados["erro_statusinvest"] = f"Status Invest: Erro na automação - {str(e)}"
+            print(f"!!! ERRO INESPERADO durante a extração para {self.ticker}: {e}")
+            dados["erro_statusinvest"] = f"Erro inesperado no scraper: {e}"
             return dados
-        
-        finally:
-            if driver:
-                print(f"Finalizando scraper para {self.ticker}. Salvando artefatos de debug...")
-                try:
-                    driver.save_screenshot(f"{self.ticker}_screenshot.png")
-                    with open(f"{self.ticker}_pagina.html", "w", encoding='utf-8') as f:
-                        f.write(driver.page_source)
-                    print("Artefatos de debug salvos.")
-                except Exception as e:
-                    print(f"!!! Falha ao salvar artefatos de debug para {self.ticker}: {e}")
-                driver.quit()
-                print("Navegador fechado.")
