@@ -54,7 +54,7 @@ class StatusInvestScraper:
             dados["erro_statusinvest"] = error_msg
             return dados
 
-        api_url = 'https://scrapeninja.apiroad.net/scrape'
+        api_url = 'https://scrapeninja.p.rapidapi.com/scrape'
         payload = {"url": self.target_url}
         headers = {
             "Content-Type": "application/json",
