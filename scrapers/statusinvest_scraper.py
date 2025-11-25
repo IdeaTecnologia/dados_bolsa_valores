@@ -51,11 +51,15 @@ class StatusInvestScraper:
         dados["ticker"] = self.ticker
         dados["erro_statusinvest"] = ""
 
-        # Tenta pegar a chave da API salva (os.getenv funciona tanto com .env local quanto com GitHub Secrets)
+        # O site Status Invest tem proteções contra scraping direto.
+        # Usaremos a API do ScrapeNinja via RapidAPI para contornar isso.
+        # O limite gratuito é de 100 requisições por mês, conforme site https://apiroad.net/marketplace/apis/scrapeninja
+
+        # Tenta pegar a chave da API ScrapeNinja salva (os.getenv funciona tanto com .env local quanto com GitHub Secrets)
         api_key = os.getenv('RAPIDAPI_KEY')
         
         if not api_key:
-            error_msg = "Chave da API não encontrada."
+            error_msg = "Chave da API ScrapeNinja não encontrada."
             print(f"!!! ERRO: {error_msg}")
             dados["erro_statusinvest"] = error_msg
             return dados
