@@ -8,7 +8,7 @@ on:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 120 #Tempo máximo de execução em minutos
     permissions:
       contents: write
     steps:
@@ -25,7 +25,7 @@ jobs:
 
       - name: Run Scraper
         env:
-          APIROAD_KEY: ${{ secrets.APIROAD_KEY }} # Chave de API armazenada nos segredos do repositório
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }} # Chave de API armazenada nos segredos do repositório
         run: python main.py
       
       - name: Commit and push changes

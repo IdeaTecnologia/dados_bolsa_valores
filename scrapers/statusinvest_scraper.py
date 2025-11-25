@@ -3,6 +3,10 @@ import os
 from bs4 import BeautifulSoup
 from utils.normalization import normalize_numeric_value
 
+from dotenv import load_dotenv
+load_dotenv() # Carrega variáveis do arquivo .env se ele existir
+
+
 # Dicionários de mapeamento permanecem os mesmos
 STATUSINVEST_INDICATORS_MAP = {
     # ... (cole seu dicionário completo aqui, sem alterações)
@@ -41,28 +45,48 @@ class StatusInvestScraper:
             normalized_value = normalize_numeric_value(raw_value)
             if normalized_value is not None: dados[key] = normalized_value
 
+    
     def fetch_data(self):
         all_keys = self._get_all_possible_keys()
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
         dados["erro_statusinvest"] = ""
 
-        api_key = os.getenv('APIROAD_KEY')
+        # CHAVE DIRETA (HARDCODED) PARA TESTE LOCAL APENAS
+        # api_key = "bdd08ee4b2msh8e9cc0a8168ae02p166216jsn8af78cdcfa33"
+
+        # Tenta pegar a chave do ambiente (os.getenv funciona tanto com .env local quanto com GitHub Secrets)
+        api_key = os.getenv('RAPIDAPI_KEY')
+        
         if not api_key:
-            error_msg = "Chave da API (APIROAD_KEY) não encontrada nos segredos do GitHub."
+            error_msg = "Chave da API não encontrada."
             print(f"!!! ERRO: {error_msg}")
             dados["erro_statusinvest"] = error_msg
             return dados
 
         api_url = 'https://scrapeninja.p.rapidapi.com/scrape'
-        payload = {"url": self.target_url}
+        
         headers = {
             "Content-Type": "application/json",
-            "x-apiroad-key": api_key
+            "x-rapidapi-key": api_key,
+            "x-rapidapi-host": "scrapeninja.p.rapidapi.com"
+        }
+        
+        # --- MELHORIA 1: Payload mais robusto ---
+        payload = {
+            "url": self.target_url,
+            "retryNum": 1,
+            "geo": "br",
+            # Instruções para esperar o site carregar o JS
+            "renderJs": True, 
+            "wait": 5000, # Espera 5 segundos antes de pegar o HTML
+            "headers": [
+                "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ]
         }
 
         try:
-            print(f"Buscando dados para {self.ticker} via ScrapeNinja (APIRoad)...")
+            print(f"Buscando dados para {self.ticker} via ScrapeNinja...")
             response = requests.post(api_url, json=payload, headers=headers)
             response.raise_for_status()
 
@@ -72,20 +96,66 @@ class StatusInvestScraper:
             if not html_content:
                 raise ValueError("A resposta da API não contém o corpo HTML.")
 
+            # --- MELHORIA 2: Salvar HTML para DEBUG ---
+            # Isso vai criar um arquivo tipo "debug_EGIE3.html" na pasta.
+            # Abra esse arquivo no navegador para ver se os dados estão lá.
+            # debug_filename = f"debug_{self.ticker}.html"
+            # with open(debug_filename, "w", encoding="utf-8") as f:
+            #     f.write(html_content)
+            # ------------------------------------------
+
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            # --- LÓGICA DE EXTRAÇÃO (INALTERADA) ---
-            # ... (Toda a sua lógica de parsing com BeautifulSoup continua aqui)
+            # --- MELHORIA 3: Lógica de Extração Genérica ---
+            # O StatusInvest costuma colocar os indicadores em blocos com 'title'
+            # Ex: <div title="Dividend Yield"> ... <strong class="value">10%</strong> </div>
+            
+            # Vamos iterar sobre o seu MAPA de indicadores
+            for nome_indicador, chave_json in STATUSINVEST_INDICATORS_MAP.items():
+                try:
+                    # Tenta encontrar pelo título do indicador (estratégia comum no StatusInvest)
+                    # Procura qualquer elemento que contenha o texto do indicador
+                    elementos = soup.find_all(string=lambda text: text and nome_indicador in text)
+                    
+                    valor_encontrado = None
+                    
+                    for elem in elementos:
+                        # Tenta achar o valor próximo (geralmente num strong com class 'value')
+                        # Sobe para o pai (div ou container) e procura a classe value
+                        parent = elem.parent
+                        while parent and parent.name != 'body':
+                            valor_tag = parent.find(class_='value')
+                            if valor_tag:
+                                valor_encontrado = valor_tag.get_text(strip=True)
+                                break
+                            parent = parent.parent
+                        
+                        if valor_encontrado:
+                            break
+                    
+                    # Se achou algo, processa
+                    if valor_encontrado:
+                        self._process_and_store_data(dados, chave_json, valor_encontrado)
+                    
+                    # TENTATIVA EXTRA: Para cotação atual (que as vezes tem estrutura diferente)
+                    if chave_json == "statusInvest_cotacao" and dados[chave_json] is None:
+                        cotacao_elem = soup.find("div", title="Valor atual")
+                        if cotacao_elem:
+                            val = cotacao_elem.find("strong", class_="value")
+                            if val:
+                                self._process_and_store_data(dados, chave_json, val.get_text())
 
-            print(f"Extração para {self.ticker} via APIRoad concluída com sucesso.")
+                except Exception as e:
+                    # Apenas ignora erros de parsing individuais para não travar tudo
+                    continue
+
+            print(f"Extração para {self.ticker} concluída.")
             return dados
             
         except requests.exceptions.HTTPError as e:
-            error_body = e.response.text
-            print(f"!!! ERRO HTTP da API para {self.ticker}: {e.response.status_code} - {error_body}")
-            dados["erro_statusinvest"] = f"Erro na API ({e.response.status_code}): {error_body}"
+            dados["erro_statusinvest"] = f"Erro API: {e.response.status_code}"
             return dados
         except Exception as e:
-            print(f"!!! ERRO INESPERADO durante a extração para {self.ticker}: {e}")
-            dados["erro_statusinvest"] = f"Erro inesperado no scraper: {e}"
+            print(f"Erro inesperado: {e}")
+            dados["erro_statusinvest"] = f"Erro scraper: {e}"
             return dados
