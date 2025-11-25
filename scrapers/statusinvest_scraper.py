@@ -9,7 +9,6 @@ load_dotenv() # Carrega variáveis do arquivo .env se ele existir
 
 # Dicionários de mapeamento permanecem os mesmos
 STATUSINVEST_INDICATORS_MAP = {
-    # ... (cole seu dicionário completo aqui, sem alterações)
     "Valor atual": "statusInvest_cotacao", "Min. 52 semanas": "statusInvest_min_52_semanas", "Máx. 52 semanas": "statusInvest_max_52_semanas",
     "Dividend Yield": "statusInvest_dy_percentual", "Valorização (12m)": "statusInvest_valorizacao_12m_percentual", "D.Y": "statusInvest_dy_percentual",
     "P/L": "statusInvest_pl", "PEG Ratio": "statusInvest_peg_ratio", "P/VP": "statusInvest_pvp", "EV/EBITDA": "statusInvest_ev_ebitda", "EV/EBIT": "statusInvest_ev_ebit",
@@ -52,10 +51,7 @@ class StatusInvestScraper:
         dados["ticker"] = self.ticker
         dados["erro_statusinvest"] = ""
 
-        # CHAVE DIRETA (HARDCODED) PARA TESTE LOCAL APENAS
-        # api_key = "bdd08ee4b2msh8e9cc0a8168ae02p166216jsn8af78cdcfa33"
-
-        # Tenta pegar a chave do ambiente (os.getenv funciona tanto com .env local quanto com GitHub Secrets)
+        # Tenta pegar a chave da API salva (os.getenv funciona tanto com .env local quanto com GitHub Secrets)
         api_key = os.getenv('RAPIDAPI_KEY')
         
         if not api_key:
@@ -72,7 +68,6 @@ class StatusInvestScraper:
             "x-rapidapi-host": "scrapeninja.p.rapidapi.com"
         }
         
-        # --- MELHORIA 1: Payload mais robusto ---
         payload = {
             "url": self.target_url,
             "retryNum": 1,
@@ -96,7 +91,7 @@ class StatusInvestScraper:
             if not html_content:
                 raise ValueError("A resposta da API não contém o corpo HTML.")
 
-            # --- MELHORIA 2: Salvar HTML para DEBUG ---
+            # --- Salvar HTML para DEBUG ---
             # Isso vai criar um arquivo tipo "debug_EGIE3.html" na pasta.
             # Abra esse arquivo no navegador para ver se os dados estão lá.
             # debug_filename = f"debug_{self.ticker}.html"
@@ -106,11 +101,10 @@ class StatusInvestScraper:
 
             soup = BeautifulSoup(html_content, 'html.parser')
             
-            # --- MELHORIA 3: Lógica de Extração Genérica ---
             # O StatusInvest costuma colocar os indicadores em blocos com 'title'
             # Ex: <div title="Dividend Yield"> ... <strong class="value">10%</strong> </div>
             
-            # Vamos iterar sobre o seu MAPA de indicadores
+            # Vamos iterar sobre o MAPA de indicadores
             for nome_indicador, chave_json in STATUSINVEST_INDICATORS_MAP.items():
                 try:
                     # Tenta encontrar pelo título do indicador (estratégia comum no StatusInvest)
