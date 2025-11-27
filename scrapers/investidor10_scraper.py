@@ -14,6 +14,7 @@ INVESTIDOR10_INDICATORS_MAP = {
     "VPA": "investidor10_vpa",
     "LPA": "investidor10_lpa",
     "DÍVIDA LÍQUIDA / PATRIMÔNIO": "investidor10_divida_liquida_patrimonio",
+    "DÍVIDA BRUTA / PATRIMÔNIO": "investidor10_divida_bruta_patrimonio",
     "DÍVIDA LÍQUIDA / EBITDA": "investidor10_divida_liquida_ebitda",
     "DÍVIDA LÍQUIDA / EBIT": "investidor10_divida_liquida_ebit",
     "LIQUIDEZ CORRENTE": "investidor10_liquidez_corrente",
@@ -94,7 +95,7 @@ class Investidor10Scraper:
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
         # Garante que o campo de erro sempre exista.
-        dados["erro_investidor10"] = ""
+        dados["investidor10_erro"] = ""
         
         try:
             response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome110", timeout=20)
@@ -164,6 +165,6 @@ class Investidor10Scraper:
         except Exception as e:
             error_message = f"Investidor10: {str(e)}"
             print(f"Erro ao buscar dados de {self.ticker} no Investidor10: {e}")
-            dados["erro_investidor10"] = error_message
+            dados["investidor10_erro"] = error_message
         
         return dados

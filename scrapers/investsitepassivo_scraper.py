@@ -84,7 +84,7 @@ class InvestSitePassivoScraper:
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
         # Garante que o campo de erro sempre exista.
-        dados["erro_investsitepassivo"] = ""
+        dados["investsitepassivo_erro"] = ""
 
         max_tentativas = 3
         ultimo_erro = ""
@@ -127,5 +127,5 @@ class InvestSitePassivoScraper:
                 ultimo_erro = str(e)
         
         # Se o loop terminar sem sucesso, preenche a mensagem de erro.
-        dados["erro_investsitepassivo"] = f"InvestSite (Passivo): Falha após {max_tentativas} tentativas: {ultimo_erro}"
+        dados["investsitepassivo_erro"] = f"InvestSite (Passivo): Falha após {max_tentativas} tentativas: {ultimo_erro}"
         return dados

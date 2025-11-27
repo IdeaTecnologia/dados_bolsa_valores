@@ -1,188 +1,229 @@
-'''
-Pesquisar por python web scraping cloudflare
-
-Proteções de StatusInvest:
-1 Cloudflare Bot Management - Scripts da Cloudflare no cabeçalho
-2 Google Tag Manager - Múltiplos scripts de rastreamento
-3 Akamai Bot Protection - Scripts de proteção
-4 Fingerprinting de navegador - Diversos scripts coletando informações do client
-5 Request de origem - Verificação de cabeçalhos HTTP
-6 reCAPTCHA Enterprise - Proteção contra bots do Google
-'''
-
-import time
+import requests
+import os
 from bs4 import BeautifulSoup
-from curl_cffi import requests as curl_requests
 from utils.normalization import normalize_numeric_value
 
-STATUSINVEST_INDICATORS_MAP = {
-    # Bloco Superior
-    "Valor atual": "statusInvest_cotacao",
-    "Min. 52 semanas": "statusInvest_min_52_semanas",
-    "Máx. 52 semanas": "statusInvest_max_52_semanas",
-    "Dividend Yield": "statusInvest_dy_percentual",
-    "Valorização (12m)": "statusInvest_valorizacao_12m_percentual",
-    
-    # Seção de Indicadores Principais
-    "D.Y": "statusInvest_dy_percentual",
-    "P/L": "statusInvest_pl",
-    "PEG Ratio": "statusInvest_peg_ratio",
-    "P/VP": "statusInvest_pvp",
-    "EV/EBITDA": "statusInvest_ev_ebitda",
-    "EV/EBIT": "statusInvest_ev_ebit",
-    "P/EBITDA": "statusInvest_p_ebitda",
-    "P/EBIT": "statusInvest_p_ebit",
-    "VPA": "statusInvest_vpa",
-    "P/Ativo": "statusInvest_p_ativo",
-    "LPA": "statusInvest_lpa",
-    "P/SR": "statusInvest_psr",
-    "P/Cap. Giro": "statusInvest_p_cap_giro",
-    "P/Ativo Circ. Liq.": "statusInvest_p_ativo_circ_liq",
-    "Dív. líquida/PL": "statusInvest_div_liq_pl",
-    "Dív. líquida/EBITDA": "statusInvest_div_liq_ebitda",
-    "Dív. líquida/EBIT": "statusInvest_div_liq_ebit",
-    "PL/Ativos": "statusInvest_pl_ativos",
-    "Passivos/Ativos": "statusInvest_passivos_ativos",
-    "Liq. corrente": "statusInvest_liq_corrente",
-    "Giro ativos": "statusInvest_giro_ativos",
-    "M. Bruta": "statusInvest_margem_bruta_percentual",
-    "M. EBITDA": "statusInvest_margem_ebitda_percentual",
-    "M. EBIT": "statusInvest_margem_ebit_percentual",
-    "M. Líquida": "statusInvest_margem_liquida_percentual",
-    "ROE": "statusInvest_roe_percentual",
-    "ROA": "statusInvest_roa_percentual",
-    "ROIC": "statusInvest_roic_percentual",
-    "CAGR Receitas 5 anos": "statusInvest_cagr_rec_5anos_percentual",
-    "CAGR Lucros 5 anos": "statusInvest_cagr_lucros_5anos_percentual",
+from dotenv import load_dotenv
+load_dotenv() # Carrega variáveis do arquivo .env se ele existir
 
-    # Seção "Geral" da empresa
-    "Patrimônio líquido": "statusInvest_patrimonio_liquido",
-    "Ativos": "statusInvest_ativos",
-    "Ativo circulante": "statusInvest_ativo_circulante",
-    "Dívida bruta": "statusInvest_divida_bruta",
-    "Dívida líquida": "statusInvest_divida_liquida",
-    "Valor de mercado": "statusInvest_valor_mercado",
-    "Valor de firma": "statusInvest_valor_firma",
-    "Nº total de papéis": "statusInvest_nro_papeis",
-    "Free Float": "statusInvest_free_float_percentual",
-    
-    # Outras informações
-    "Tag Along": "statusInvest_tag_along_percentual",
-    "Liquidez média diária": "statusInvest_liquidez_media_diaria",
-    "Setor de Atuação": "statusInvest_setor",
-    "Subsetor de Atuação": "statusInvest_subsetor",
-    "Segmento de Atuação": "statusInvest_segmento",
+
+# Dicionários de mapeamento permanecem os mesmos
+STATUSINVEST_INDICATORS_MAP = {
+    "Valor atual": "statusInvest_cotacao", "Min. 52 semanas": "statusInvest_min_52_semanas", "Máx. 52 semanas": "statusInvest_max_52_semanas",
+    "Dividend Yield": "statusInvest_dy_percentual", "Valorização (12m)": "statusInvest_valorizacao_12m_percentual", "D.Y": "statusInvest_dy_percentual",
+    "P/L": "statusInvest_pl", "PEG Ratio": "statusInvest_peg_ratio", "P/VP": "statusInvest_pvp", "EV/EBITDA": "statusInvest_ev_ebitda", "EV/EBIT": "statusInvest_ev_ebit",
+    "P/EBITDA": "statusInvest_p_ebitda", "P/EBIT": "statusInvest_p_ebit", "VPA": "statusInvest_vpa", "P/Ativo": "statusInvest_p_ativo", "LPA": "statusInvest_lpa",
+    "P/SR": "statusInvest_psr", "P/Cap. Giro": "statusInvest_p_cap_giro", "P/Ativo Circ. Liq.": "statusInvest_p_ativo_circ_liq", "Dív. líquida/PL": "statusInvest_div_liq_pl",
+    "Dív. líquida/EBITDA": "statusInvest_div_liq_ebitda", "Dív. líquida/EBIT": "statusInvest_div_liq_ebit", "PL/Ativos": "statusInvest_pl_ativos",
+    "Passivos/Ativos": "statusInvest_passivos_ativos", "Liq. corrente": "statusInvest_liq_corrente", "Giro ativos": "statusInvest_giro_ativos",
+    "M. Bruta": "statusInvest_margem_bruta_percentual", "M. EBITDA": "statusInvest_margem_ebitda_percentual", "M. EBIT": "statusInvest_margem_ebit_percentual",
+    "M. Líquida": "statusInvest_margem_liquida_percentual", "ROE": "statusInvest_roe_percentual", "ROA": "statusInvest_roa_percentual",
+    "ROIC": "statusInvest_roic_percentual", "CAGR Receitas 5 anos": "statusInvest_cagr_rec_5anos_percentual", "CAGR Lucros 5 anos": "statusInvest_cagr_lucros_5anos_percentual",
+    "Patrimônio líquido": "statusInvest_patrimonio_liquido", "Ativos": "statusInvest_ativos", "Ativo circulante": "statusInvest_ativo_circulante",
+    "Dívida bruta": "statusInvest_divida_bruta", "Dívida líquida": "statusInvest_divida_liquida", "Valor de mercado": "statusInvest_valor_mercado",
+    "Valor de firma": "statusInvest_valor_firma", "Nº total de papéis": "statusInvest_nro_papeis", "Free Float": "statusInvest_free_float_percentual",
+    "Tag Along": "statusInvest_tag_along_percentual", "Liquidez média diária": "statusInvest_liquidez_media_diaria", "Setor de Atuação": "statusInvest_setor",
+    "Subsetor de Atuação": "statusInvest_subsetor", "Segmento de Atuação": "statusInvest_segmento",
+
+    # Dados de Recompra
+    "Data Início Recompra": "statusInvest_recompra_inicio", 
+    "Data Fim Recompra": "statusInvest_recompra_fim", 
+    "Quantidade Recompra": "statusInvest_recompra_quantidade",
 }
 
 NON_NUMERIC_KEYS = {
     "statusInvest_setor", "statusInvest_subsetor", "statusInvest_segmento",
+    "statusInvest_recompra_inicio", "statusInvest_recompra_fim"
 }
 
 class StatusInvestScraper:
     def __init__(self, ticker):
         self.ticker = ticker
-        self.url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
-        self.headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"}
+        self.target_url = f"https://statusinvest.com.br/acoes/{self.ticker.lower()}"
 
     def _get_all_possible_keys(self):
-        """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
         return list(STATUSINVEST_INDICATORS_MAP.values())
 
     def _process_and_store_data(self, dados, key, raw_value, overwrite=True):
-        """Função auxiliar para normalizar e armazenar dados."""
-        if not overwrite and (key in dados and dados[key] is not None):
-            return
-
+        if not overwrite and (key in dados and dados[key] is not None): return
         if key in NON_NUMERIC_KEYS:
             dados[key] = raw_value.strip() if isinstance(raw_value, str) else raw_value
         else:
             normalized_value = normalize_numeric_value(raw_value)
-            if normalized_value is not None:
-                dados[key] = normalized_value
+            if normalized_value is not None: dados[key] = normalized_value
+
+    def _extrair_dados_recompra(self, soup):
+        """
+        Busca dados do programa de recompra ativo na página.
+        Retorna um dicionário com as chaves mapeadas e os valores brutos.
+        """
+        dados_recompra = {}
+        try:
+            # Encontra o bloco de recompra (buyback card)
+            div_programa_recompra = soup.find('div', class_='buyback card')
+            if not div_programa_recompra:
+                return dados_recompra
+
+            # Verifica se há algum badge "Ativo" no primeiro bloco (que é sempre o mais recente e relevante)
+            # A estrutura HTML mostra que o status está dentro de uma linha (div class="line ...")
+            div_primeira_linha = div_programa_recompra.find('div', class_='line')
+            
+            if div_primeira_linha:
+                status_span = div_primeira_linha.find('span', class_='badge')
+                
+                # Verifica se o status é "Ativo"
+                if status_span and 'ativo' in status_span.get_text(strip=True).lower():
+                    
+                    # Mapeamento das labels do site para nossas chaves do JSON
+                    mapa_interno = {
+                        "DATA DE INÍCIO": "statusInvest_recompra_inicio",
+                        "DATA DE FIM": "statusInvest_recompra_fim",
+                        "QUANTIDADE": "statusInvest_recompra_quantidade"
+                    }
+                    
+                    # Busca todas as tags que podem conter chave ou valor
+                    # fs-2: chave (ex: DATA DE INÍCIO)
+                    # fw-700 ou fs-4: valor (ex: 25/03/2024)
+                    spans_info = div_primeira_linha.find_all('span', class_=['fs-2', 'fw-700', 'fs-4'])
+                    
+                    chave_atual = None
+                    for span in spans_info:
+                        classes = span.get('class', [])
+                        texto = span.get_text(strip=True)
+                        
+                        # Se for uma label (fs-2)
+                        if 'fs-2' in classes:
+                            chave_atual = texto.upper()
+                        
+                        # Se for um valor (fw-700 ou fs-4) e tivermos uma chave pendente
+                        elif chave_atual and ('fw-700' in classes or 'fs-4' in classes):
+                            if chave_atual in mapa_interno:
+                                dados_recompra[mapa_interno[chave_atual]] = texto
+                            
+                            # Reseta a chave para buscar a próxima
+                            chave_atual = None
+
+        except Exception as e:
+            print(f"Erro ao extrair dados de recompra para {self.ticker}: {e}")
+            
+        return dados_recompra
 
     def fetch_data(self):
-        # Inicializa o dicionário com todas as chaves possíveis e valor None.
         all_keys = self._get_all_possible_keys()
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
-        # Garante que o campo de erro sempre exista.
         dados["erro_statusinvest"] = ""
 
-        max_tentativas = 3
-        ultimo_erro = ""
-        for tentativa in range(1, max_tentativas + 1):
-            try:
-                time.sleep(1 * tentativa)
-                response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome110", timeout=20)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
+        # O site Status Invest tem proteções contra scraping direto.
+        # Usaremos a API do ScrapeNinja via RapidAPI para contornar isso.
+        # O limite gratuito é de 100 requisições por mês, conforme site https://apiroad.net/marketplace/apis/scrapeninja
 
-                # LÓGICA DE EXTRAÇÃO E NORMALIZAÇÃO
-                
-                # 1. Bloco Superior
-                for top_info in soup.select('.top-info'):
-                    for info_item in top_info.find_all('div', class_='info'):
-                        title_elem = info_item.find('h3', class_='title')
-                        value_elem = info_item.find('strong', class_='value')
-                        if title_elem and value_elem:
-                            title = title_elem.get_text(strip=True)
-                            if 'Liquidez' in title: title = "Liquidez média diária"
-                            
-                            if title in STATUSINVEST_INDICATORS_MAP:
-                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                self._process_and_store_data(dados, key, value_elem.text)
-
-                # 2. Seção de Indicadores Principais
-                if indicators_section := soup.select_one('#indicators-section'):
-                    for item in indicators_section.select('.indicator-today-container .item'):
-                        title_elem = item.find('h3', class_='title')
-                        value_elem = item.find('strong', class_='value')
-                        if title_elem and value_elem:
-                            title = title_elem.get_text(strip=True)
-                            if title in STATUSINVEST_INDICATORS_MAP:
-                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                overwrite = key != "statusInvest_dy_percentual"
-                                self._process_and_store_data(dados, key, value_elem.text, overwrite=overwrite)
-
-                # 3. Informações da Empresa
-                if company_section := soup.select_one('#company-section'):
-                    for info_div in company_section.select('.top-info .info'):
-                        value_elem = info_div.find('strong', class_='value')
-                        if not value_elem: continue
-                        
-                        raw_value = value_elem.get_text(strip=True)
-                        title_elem = info_div.select_one('h3.title span') or \
-                                     info_div.select_one('a h3.title') or \
-                                     info_div.find('h3', class_='title')
-                        
-                        if title_elem:
-                            title = title_elem.get_text(strip=True)
-                            if title in STATUSINVEST_INDICATORS_MAP:
-                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                self._process_and_store_data(dados, key, raw_value)
-                    
-                    # 4. Outras Infos
-                    if other_info := company_section.find('div', class_='company-other-info'):
-                        if tag_along_div := other_info.find('h3', string=lambda t: t and 'Tag Along' in t):
-                            if value_elem := tag_along_div.find_next_sibling('div').find('strong', class_='value'):
-                                self._process_and_store_data(dados, 'statusInvest_tag_along_percentual', value_elem.text)
-                        
-                        if atuacao_div := other_info.find('h3', class_='title', string='Atuação'):
-                            if container := atuacao_div.find_next_sibling('div', class_='scroll'):
-                                for item in container.find_all('div', class_='item'):
-                                    if strong := item.find('strong'):
-                                        if a_tag := item.find('a'):
-                                            title, value = strong.get_text(strip=True), a_tag.get_text(strip=True)
-                                            if title in STATUSINVEST_INDICATORS_MAP:
-                                                key = STATUSINVEST_INDICATORS_MAP[title]
-                                                self._process_and_store_data(dados, key, value)
-                # Se chegou até aqui, a extração foi bem-sucedida.
-                return dados
-
-            except Exception as e:
-                print(f"Tentativa {tentativa} para {self.ticker} no StatusInvest falhou: {e}")
-                ultimo_erro = str(e)
+        # Tenta pegar a chave da API ScrapeNinja salva (os.getenv funciona tanto com .env local quanto com GitHub Secrets)
+        api_key = os.getenv('RAPIDAPI_KEY')
         
-        # Se o loop terminar sem sucesso, preenche a mensagem de erro.
-        dados["erro_statusinvest"] = f"Status Invest: Falha após {max_tentativas} tentativas: {ultimo_erro}"
-        return dados
+        if not api_key:
+            error_msg = "Chave da API ScrapeNinja não encontrada."
+            print(f"!!! ERRO: {error_msg}")
+            dados["erro_statusinvest"] = error_msg
+            return dados
+
+        api_url = 'https://scrapeninja.p.rapidapi.com/scrape'
+        
+        headers = {
+            "Content-Type": "application/json",
+            "x-rapidapi-key": api_key,
+            "x-rapidapi-host": "scrapeninja.p.rapidapi.com"
+        }
+        
+        payload = {
+            "url": self.target_url,
+            "retryNum": 1,
+            "geo": "br",
+            # Instruções para esperar o site carregar o JS
+            "renderJs": True, 
+            "wait": 5000, # Espera 5 segundos antes de pegar o HTML
+            "headers": [
+                "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ]
+        }
+
+        try:
+            print(f"Buscando dados para {self.ticker} via ScrapeNinja...")
+            response = requests.post(api_url, json=payload, headers=headers)
+            response.raise_for_status()
+
+            response_json = response.json()
+            html_content = response_json.get('body', '')
+
+            if not html_content:
+                raise ValueError("A resposta da API não contém o corpo HTML.")
+
+            # --- Salvar HTML para DEBUG ---
+            # Isso vai criar um arquivo tipo "debug_EGIE3.html" na pasta.
+            # Abra esse arquivo no navegador para ver se os dados estão lá.
+            # debug_filename = f"debug_{self.ticker}.html"
+            # with open(debug_filename, "w", encoding="utf-8") as f:
+            #     f.write(html_content)
+            # ------------------------------------------
+
+            soup = BeautifulSoup(html_content, 'html.parser')
+            
+            # O StatusInvest costuma colocar os indicadores em blocos com 'title'
+            # Ex: <div title="Dividend Yield"> ... <strong class="value">10%</strong> </div>
+            
+            # Vamos iterar sobre o MAPA de indicadores
+            for nome_indicador, chave_json in STATUSINVEST_INDICATORS_MAP.items():
+                try:
+                    # Tenta encontrar pelo título do indicador (estratégia comum no StatusInvest)
+                    # Procura qualquer elemento que contenha o texto do indicador
+                    elementos = soup.find_all(string=lambda text: text and nome_indicador in text)
+                    
+                    valor_encontrado = None
+                    
+                    for elem in elementos:
+                        # Tenta achar o valor próximo (geralmente num strong com class 'value')
+                        # Sobe para o pai (div ou container) e procura a classe value
+                        parent = elem.parent
+                        while parent and parent.name != 'body':
+                            valor_tag = parent.find(class_='value')
+                            if valor_tag:
+                                valor_encontrado = valor_tag.get_text(strip=True)
+                                break
+                            parent = parent.parent
+                        
+                        if valor_encontrado:
+                            break
+                    
+                    # Se achou algo, processa
+                    if valor_encontrado:
+                        self._process_and_store_data(dados, chave_json, valor_encontrado)
+                    
+                    # TENTATIVA EXTRA: Para cotação atual (que as vezes tem estrutura diferente)
+                    if chave_json == "statusInvest_cotacao" and dados[chave_json] is None:
+                        cotacao_elem = soup.find("div", title="Valor atual")
+                        if cotacao_elem:
+                            val = cotacao_elem.find("strong", class_="value")
+                            if val:
+                                self._process_and_store_data(dados, chave_json, val.get_text())
+
+                except Exception as e:
+                    # Apenas ignora erros de parsing individuais para não travar tudo
+                    continue
+
+            # --- Extração de Dados de Recompra ---
+            # Executa o método específico para recompra e integra os dados encontrados
+            dados_recompra = self._extrair_dados_recompra(soup)
+            for k, v in dados_recompra.items():
+                # Usa overwrite=True para garantir que salve, embora esses dados sejam únicos
+                self._process_and_store_data(dados, k, v, overwrite=True)
+
+            print(f"Extração para {self.ticker} concluída.")
+            return dados
+            
+        except requests.exceptions.HTTPError as e:
+            dados["erro_statusinvest"] = f"Erro API: {e.response.status_code}"
+            return dados
+        except Exception as e:
+            print(f"Erro inesperado: {e}")
+            dados["erro_statusinvest"] = f"Erro scraper: {e}"
+            return dados

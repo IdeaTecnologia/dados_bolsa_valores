@@ -123,7 +123,7 @@ class InvestSiteIndicadoresScraper:
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
         # Garante que o campo de erro sempre exista.
-        dados["erro_investsiteindicadores"] = ""
+        dados["investsiteindicadores_erro"] = ""
 
         max_tentativas = 3
         ultimo_erro = ""
@@ -170,5 +170,5 @@ class InvestSiteIndicadoresScraper:
                 ultimo_erro = str(e)
         
         # Se o loop terminar sem sucesso, preenche a mensagem de erro.
-        dados["erro_investsiteindicadores"] = f"InvestSite (Indicadores): Falha após {max_tentativas} tentativas: {ultimo_erro}"
+        dados["investsiteindicadores_erro"] = f"InvestSite (Indicadores): Falha após {max_tentativas} tentativas: {ultimo_erro}"
         return dados

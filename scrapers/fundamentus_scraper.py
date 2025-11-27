@@ -96,7 +96,7 @@ class FundamentusScraper:
         dados = {key: None for key in all_keys}
         dados["ticker"] = self.ticker
         # Garante que o campo de erro sempre exista.
-        dados["erro_fundamentus"] = ""
+        dados["fundamentus_erro"] = ""
         
         max_tentativas = 3
         ultimo_erro = ""
@@ -176,6 +176,6 @@ class FundamentusScraper:
         
         # Se todas as tentativas falharem, preenche a mensagem de erro e retorna o dicionário completo.
         if ultimo_erro:
-            dados["erro_fundamentus"] = f"Fundamentus: Falha após {max_tentativas} tentativas: {ultimo_erro}"
+            dados["fundamentus_erro"] = f"Fundamentus: Falha após {max_tentativas} tentativas: {ultimo_erro}"
             
         return dados
