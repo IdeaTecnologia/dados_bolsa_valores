@@ -91,7 +91,10 @@ def main():
             acao = Acao(ticker)
             
             # Chama o método. Se passar o segundo argumento, ele PULA o request caro.
-            dados_novos = acao.get_all_data(dados_statusinvest_externos=dados_status_invest_para_injetar)
+            dados_novos = acao.get_all_data(
+                dados_existentes=dados_status_invest_para_injetar,
+                use_local_strategy=False # No GitHub Actions usa API e não local (False)
+            )
 
             # Verifica se houve erro fatal de chaves durante a execução dessa ação
             # O scraper retorna erro_statusinvest = "ALL_KEYS_EXHAUSTED" se falhar tudo
