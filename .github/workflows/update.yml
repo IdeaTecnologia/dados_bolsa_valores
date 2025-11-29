@@ -2,36 +2,39 @@ name: Atualizar Ações Diariamente
 
 on:
   schedule:
-    - cron: '0 23 * * *'
-  workflow_dispatch:
+    # Cron roda em UTC. 01:00 UTC = 22:00 Horário de Brasília (UTC-3)
+    # Mudamos para garantir que todos os sites (Inv10, Fundamentus) tenham fechado o dia.
+    - cron: '0 1 * * *'
+  workflow_dispatch: # Permite clicar no botão "Run workflow" manualmente se precisar
 
 jobs:
   update:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120 #Tempo máximo de execução em minutos
+    runs-on: ubuntu-latest # Usa uma máquina virtual Linux padrão do GitHub
+    timeout-minutes: 120   # Mata o processo se travar por mais de 2 horas (segurança)
     permissions:
-      contents: write
+      contents: write      # Dá permissão para o bot salvar arquivos no repositório
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # Baixa seu código para a máquina virtual
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v4 # Prepara o ambiente Python 3.10
         with:
           python-version: "3.10"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt # Instala as libs necessárias (requests, bs4, etc)
 
       - name: Run Scraper
         env:
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }} # Chave de API armazenada nos segredos do repositório
-        run: python main.py
-      
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }} # Injeta a chave secreta de API segura
+        run: python main.py # Roda o script principal que gera o JSON
+
       - name: Commit and push changes
         run: |
-          git config --global user.name "GitHub Actions"
+          git config --global user.name "GitHub Actions" # Define nome do bot no commit
           git config --global user.email "actions@github.com"
-          git add dados_acoes.json
+          git add dados_acoes.json # Adiciona o JSON gerado na área de stage
+          # O comando abaixo só faz commit se o arquivo mudou, evitando erro de "nothing to commit"
           git diff-index --quiet HEAD || git commit -m "Atualização automática $(date "+%d/%m/%Y %H:%M")"
-          git push
+          git push # Envia o arquivo novo para o repositório
