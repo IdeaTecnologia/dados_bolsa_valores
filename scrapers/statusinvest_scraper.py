@@ -4,6 +4,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 from utils.normalization import normalize_numeric_value
 from dotenv import load_dotenv
+import pytz
 
 load_dotenv()
 
@@ -213,7 +214,9 @@ class StatusInvestScraper:
             for k, v in dados_recompra.items():
                 self._process_and_store_data(dados, k, v, overwrite=True)
 
-            dados["statusInvest_data_atualizacao"] = datetime.now().strftime("%Y-%m-%d")
+            # Define timezone BR e formato com hora
+            br_tz = pytz.timezone('America/Sao_Paulo')
+            dados["statusInvest_data_atualizacao"] = datetime.now(br_tz).strftime("%Y-%m-%d %H:%M:%S")
             dados["statusInvest_fonte"] = fonte
 
             return dados

@@ -65,7 +65,11 @@ def main():
             data_att_str = dados_antigos.get('statusInvest_data_atualizacao')
             if data_att_str:
                 try:
-                    data_att = datetime.strptime(data_att_str, "%Y-%m-%d")
+                    # CORREÇÃO AQUI: Pegamos apenas os 10 primeiros caracteres (YYYY-MM-DD)
+                    # Isso funciona se tiver hora ("2025-12-01 10:00:00") ou não ("2025-12-01")
+                    data_str_limpa = data_att_str[:10] 
+                    data_att = datetime.strptime(data_str_limpa, "%Y-%m-%d")
+                    
                     dias_passados = (datetime.now() - data_att).days
                     
                     if dias_passados < DIAS_VALIDADE_CACHE:

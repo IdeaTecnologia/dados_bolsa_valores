@@ -4,6 +4,7 @@ import subprocess
 import sys
 from models.acao import Acao
 from utils.listaticker import ListaTicker
+import pytz
 
 JSON_FILE = 'dados_acoes.json'
 
