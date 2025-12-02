@@ -2,11 +2,10 @@ name: Atualizar Ações Diariamente
 
 on:
   schedule:
-    # Cron roda em UTC. 01:00 UTC = 22:00 Horário de Brasília (UTC-3)
-    # Mudamos para garantir que todos os sites (Inv10, Fundamentus) tenham fechado o dia.
-    # Cron em UTC: Terça(2) até Sábado(6) às 01:00
-    # No Brasil: Segunda à Sexta às 22:00
-    - cron: '0 1 * * 2-6'
+    # Cron roda em UTC. Horário de Brasília está 3 horas a menos (UTC-3)
+    # Cron em UTC: Segunda(1) até Sexta(5) às 23:59
+    # No Brasil: Segunda à Sexta às 20:59
+    - cron: '59 23 * * 1-5'
   workflow_dispatch: # Permite clicar no botão "Run workflow" manualmente se precisar
 
 jobs:
