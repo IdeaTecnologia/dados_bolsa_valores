@@ -4,7 +4,9 @@ on:
   schedule:
     # Cron roda em UTC. 01:00 UTC = 22:00 Horário de Brasília (UTC-3)
     # Mudamos para garantir que todos os sites (Inv10, Fundamentus) tenham fechado o dia.
-    - cron: '0 1 * * *'
+    # Cron em UTC: Terça(2) até Sábado(6) às 01:00
+    # No Brasil: Segunda à Sexta às 22:00
+    - cron: '0 1 * * 2-6'
   workflow_dispatch: # Permite clicar no botão "Run workflow" manualmente se precisar
 
 jobs:
