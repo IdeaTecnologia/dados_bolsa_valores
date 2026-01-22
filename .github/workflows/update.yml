@@ -35,7 +35,7 @@ jobs:
         run: |
           git config --global user.name "GitHub Actions" # Define nome do bot no commit
           git config --global user.email "actions@github.com"
-          git add dados_acoes.json # Adiciona o JSON gerado na área de stage
+          git add dados_acoes.json metadata.json # Adiciona o JSON gerado na área de stage, assim como o metadata.json
           # O comando abaixo só faz commit se o arquivo mudou, evitando erro de "nothing to commit"
           git diff-index --quiet HEAD || git commit -m "Atualização automática $(date "+%d/%m/%Y %H:%M")"
           git push # Envia o arquivo novo para o repositório
