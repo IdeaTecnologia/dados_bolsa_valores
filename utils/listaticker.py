@@ -10,6 +10,7 @@ class ListaTicker:
         self._sheet_id = "1LDNmNs-sKXf3qPWCjNqdR_RO9fY7_cLhvJgoN9PKWlU"
         self._url = f"https://docs.google.com/spreadsheets/d/{self._sheet_id}/export?format=csv&gid=0"
         self.lista_ticker = self._carregar_tickers_online()
+    
 
     def _carregar_tickers_online(self):
         """
@@ -49,9 +50,12 @@ class ListaTicker:
         except Exception as e:
             print(f"❌ Erro inesperado ao carregar tickers: {e}")
             return []
+        
     
     def obter_lista_ticker(self):
         """
         Retorna a lista de tickers que foi carregada durante a inicialização.
         """
         return self.lista_ticker
+        # return ["KEPL3", "ABEV3", "ITSA4"] # <--- Para testes rápidos, descomente esta linha e comente o return acima.  
+    

@@ -1,5 +1,7 @@
+import re
 import requests
 import os
+import html
 from datetime import datetime
 from bs4 import BeautifulSoup
 from utils.normalization import normalize_numeric_value
@@ -14,11 +16,15 @@ STATUSINVEST_INDICATORS_MAP = {
     "Dividend Yield": "statusInvest_dy_percentual", "Valorização (12m)": "statusInvest_valorizacao_12m_percentual", "D.Y": "statusInvest_dy_percentual",
     "P/L": "statusInvest_pl", "PEG Ratio": "statusInvest_peg_ratio", "P/VP": "statusInvest_pvp", "EV/EBITDA": "statusInvest_ev_ebitda", "EV/EBIT": "statusInvest_ev_ebit",
     "P/EBITDA": "statusInvest_p_ebitda", "P/EBIT": "statusInvest_p_ebit", "VPA": "statusInvest_vpa", "P/Ativo": "statusInvest_p_ativo", "LPA": "statusInvest_lpa",
-    "P/SR": "statusInvest_psr", "P/Cap. Giro": "statusInvest_p_cap_giro", "P/Ativo Circ. Liq.": "statusInvest_p_ativo_circ_liq", "Dív. líquida/PL": "statusInvest_div_liq_pl",
-    "Dív. líquida/EBITDA": "statusInvest_div_liq_ebitda", "Dív. líquida/EBIT": "statusInvest_div_liq_ebit", "PL/Ativos": "statusInvest_pl_ativos",
+    "P/SR": "statusInvest_psr", "P/Cap. Giro": "statusInvest_p_cap_giro", "P/Ativo Circ. Liq.": "statusInvest_p_ativo_circ_liq", 
+    "Dív. líquida/PL": "statusInvest_div_liq_pl", "D&#xED;v. l&#xED;quida/PL": "statusInvest_div_liq_pl",  # Versão com HTML entities
+    "Dív. líquida/EBITDA": "statusInvest_div_liq_ebitda", "D&#xED;v. l&#xED;quida/EBITDA": "statusInvest_div_liq_ebitda",  # Versão com HTML entities
+    "Dív. líquida/EBIT": "statusInvest_div_liq_ebit", "D&#xED;v. l&#xED;quida/EBIT": "statusInvest_div_liq_ebit",  # Versão com HTML entities
+    "PL/Ativos": "statusInvest_pl_ativos",
     "Passivos/Ativos": "statusInvest_passivos_ativos", "Liq. corrente": "statusInvest_liq_corrente", "Giro ativos": "statusInvest_giro_ativos",
     "M. Bruta": "statusInvest_margem_bruta_percentual", "M. EBITDA": "statusInvest_margem_ebitda_percentual", "M. EBIT": "statusInvest_margem_ebit_percentual",
-    "M. Líquida": "statusInvest_margem_liquida_percentual", "ROE": "statusInvest_roe_percentual", "ROA": "statusInvest_roa_percentual",
+    "M. Líquida": "statusInvest_margem_liquida_percentual", "M. L&#xED;quida": "statusInvest_margem_liquida_percentual",  # Versão com HTML entities
+    "ROE": "statusInvest_roe_percentual", "ROA": "statusInvest_roa_percentual",
     "ROIC": "statusInvest_roic_percentual", "CAGR Receitas 5 anos": "statusInvest_cagr_rec_5anos_percentual", "CAGR Lucros 5 anos": "statusInvest_cagr_lucros_5anos_percentual",
     "Patrimônio líquido": "statusInvest_patrimonio_liquido", "Ativos": "statusInvest_ativos", "Ativo circulante": "statusInvest_ativo_circulante",
     "Dívida bruta": "statusInvest_divida_bruta", "Dívida líquida": "statusInvest_divida_liquida", "Valor de mercado": "statusInvest_valor_mercado",
@@ -47,18 +53,90 @@ class StatusInvestScraper:
         return keys
 
     def _process_and_store_data(self, dados, key, raw_value, overwrite=True):
-        if not overwrite and (key in dados and dados[key] is not None): return
+        if not overwrite and (key in dados and dados[key] is not None): 
+            return
+        
+        # Decodificar HTML entities (ex: &#xE1; -> á)
+        if isinstance(raw_value, str):
+            raw_value = html.unescape(raw_value)
+        
         if key in NON_NUMERIC_KEYS:
             dados[key] = raw_value.strip() if isinstance(raw_value, str) else raw_value
         else:
             normalized_value = normalize_numeric_value(raw_value)
-            if normalized_value is not None: dados[key] = normalized_value
+            if normalized_value is not None: 
+                dados[key] = normalized_value
+
+    def _buscar_valor_indicador(self, html_content, nome_indicador):
+        """
+        MÉTODO CORRIGIDO: Busca robusta para múltiplos formatos do StatusInvest
+        """
+        
+        # ESTRATÉGIA 1: <h3 class="title">Nome</h3> ... <strong class="value">VALOR</strong>
+        # Usado para: Ativos, Dívida Bruta, Patrimônio Líquido, etc.
+        pattern1 = rf'<h3[^>]*class="[^"]*title[^"]*"[^>]*>{re.escape(nome_indicador)}</h3>.*?<strong[^>]*class="[^"]*value[^"]*"[^>]*>([^<]+)</strong>'
+        match = re.search(pattern1, html_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        
+        # ESTRATÉGIA 2: <h3 class="title uppercase">NOME</h3> ... <strong>VALOR</strong>
+        pattern2 = rf'<h3[^>]*class="[^"]*title[^"]*uppercase[^"]*"[^>]*>{re.escape(nome_indicador)}</h3>.*?<strong[^>]*>([^<]+)</strong>'
+        match = re.search(pattern2, html_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            valor = match.group(1).strip()
+            if valor and not valor.startswith('<'):
+                return valor
+        
+        # ESTRATÉGIA 3: Para indicadores em formato de tabela/grid (P/L, ROE, etc.)
+        pattern3 = rf'<div[^>]*title="[^"]*{re.escape(nome_indicador)}[^"]*"[^>]*>.*?<strong[^>]*>([^<]+)</strong>'
+        match = re.search(pattern3, html_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        
+        # ESTRATÉGIA 4: Link com termo-indicator
+        pattern4 = rf'<h3[^>]*class="[^"]*title[^"]*"[^>]*>{re.escape(nome_indicador)}</h3>.*?<span[^>]*class="[^"]*material-icons[^"]*"[^>]*>.*?</span>.*?</a>.*?<strong[^>]*>([^<]+)</strong>'
+        match = re.search(pattern4, html_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        
+        # ESTRATÉGIA 5: sub-value (para Tag Along, Free Float, etc.)
+        pattern5 = rf'<span[^>]*class="[^"]*sub-value[^"]*"[^>]*>.*?{re.escape(nome_indicador)}.*?</span>.*?<strong[^>]*>([^<]+)</strong>'
+        match = re.search(pattern5, html_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        
+        # ESTRATÉGIA 6: Busca contextual ampla
+        title_pattern = rf'>{re.escape(nome_indicador)}<'
+        for match_title in re.finditer(title_pattern, html_content, re.IGNORECASE):
+            start_pos = match_title.end()
+            end_pos = min(len(html_content), start_pos + 800)
+            contexto = html_content[start_pos:end_pos]
+            
+            # Evita tooltips
+            if 'data-tooltip' in html_content[max(0, match_title.start()-200):match_title.start()]:
+                continue
+                
+            # Procura strong com valor
+            value_match = re.search(r'<strong[^>]*>([^<]+)</strong>', contexto)
+            if value_match:
+                valor_candidato = value_match.group(1).strip()
+                # Validar se parece um valor
+                if valor_candidato and (
+                    re.match(r'^[\d.,\-\s%]+$', valor_candidato) or
+                    re.match(r'^\d{2}/\d{2}/\d{4}$', valor_candidato) or
+                    valor_candidato in ['ON', 'PN', 'UNIT', '--'] or
+                    re.match(r'^[A-ZÀ-Ú\s\.]+$', valor_candidato, re.IGNORECASE)
+                ):
+                    return valor_candidato
+        
+        return None
 
     def _extrair_dados_recompra(self, soup):
         dados_recompra = {}
         try:
             div_programa_recompra = soup.find('div', class_='buyback card')
-            if not div_programa_recompra: return dados_recompra
+            if not div_programa_recompra: 
+                return dados_recompra
             div_primeira_linha = div_programa_recompra.find('div', class_='line')
             if div_primeira_linha:
                 status_span = div_primeira_linha.find('span', class_='badge')
@@ -73,9 +151,11 @@ class StatusInvestScraper:
                     for span in spans_info:
                         classes = span.get('class', [])
                         texto = span.get_text(strip=True)
-                        if 'fs-2' in classes: chave_atual = texto.upper()
+                        if 'fs-2' in classes: 
+                            chave_atual = texto.upper()
                         elif chave_atual and ('fw-700' in classes or 'fs-4' in classes):
-                            if chave_atual in mapa_interno: dados_recompra[mapa_interno[chave_atual]] = texto
+                            if chave_atual in mapa_interno: 
+                                dados_recompra[mapa_interno[chave_atual]] = texto
                             chave_atual = None
         except Exception as e:
             print(f"    [AVISO] Erro extração recompra {self.ticker}: {e}")
@@ -99,7 +179,6 @@ class StatusInvestScraper:
         dados["ticker"] = self.ticker
         dados["statusInvest_erro"] = ""
 
-        # Headers simulando navegador real (inspirado no PesquisaStatusInvest.py)
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -110,7 +189,6 @@ class StatusInvestScraper:
 
         print(f"  > [LOCAL] Request direto para {self.ticker}...", end="", flush=True)
         try:
-            # Timeout curto para ser rápido
             response = requests.get(self.target_url, headers=headers, timeout=10)
             
             if response.status_code in [403, 429]:
@@ -133,16 +211,13 @@ class StatusInvestScraper:
             return dados
 
     def _fetch_api_scrapeninja(self):
-        # ... (Mantém a mesma lógica da API Ninja que já funciona) ...
-        # Para economizar espaço aqui, assuma que este bloco é idêntico
-        # ao que definimos anteriormente, usando RAPIDAPI_KEYS.
-        
         dados = {key: None for key in self._get_all_possible_keys()}
         dados["ticker"] = self.ticker
         dados["statusInvest_erro"] = ""
 
         api_keys_str = os.getenv('RAPIDAPI_KEYS')
-        if not api_keys_str: api_keys_str = os.getenv('RAPIDAPI_KEY', '')
+        if not api_keys_str: 
+            api_keys_str = os.getenv('RAPIDAPI_KEY', '')
         if not api_keys_str:
             dados["statusInvest_erro"] = "Sem Chaves API"
             return dados
@@ -156,7 +231,11 @@ class StatusInvestScraper:
 
         for i, api_key in enumerate(api_keys_list):
             key_masked = f"...{api_key[-6:]}"
-            headers = {"Content-Type": "application/json", "x-rapidapi-key": api_key, "x-rapidapi-host": "scrapeninja.p.rapidapi.com"}
+            headers = {
+                "Content-Type": "application/json", 
+                "x-rapidapi-key": api_key, 
+                "x-rapidapi-host": "scrapeninja.p.rapidapi.com"
+            }
             payload = {
                 "url": self.target_url, "retryNum": 1, "geo": "br", "renderJs": True, "wait": 5000,
                 "headers": ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"]
@@ -174,7 +253,8 @@ class StatusInvestScraper:
                     print("✅")
                     sucesso = True
                     break
-            except: pass
+            except: 
+                pass
 
         if not sucesso:
             dados["statusInvest_erro"] = "ALL_KEYS_EXHAUSTED"
@@ -183,38 +263,29 @@ class StatusInvestScraper:
         return self._parse_html(html_content, dados, fonte=chave_usada)
 
     def _parse_html(self, html_content, dados, fonte):
+        """
+        MÉTODO CORRIGIDO: Usa o novo método de busca robusto
+        """
         try:
             soup = BeautifulSoup(html_content, 'html.parser')
             
+            # Processa cada indicador usando o método corrigido
             for nome_indicador, chave_json in STATUSINVEST_INDICATORS_MAP.items():
                 try:
-                    elementos = soup.find_all(string=lambda text: text and nome_indicador in text)
-                    valor_encontrado = None
-                    for elem in elementos:
-                        parent = elem.parent
-                        while parent and parent.name != 'body':
-                            valor_tag = parent.find(class_='value')
-                            if valor_tag:
-                                valor_encontrado = valor_tag.get_text(strip=True)
-                                break
-                            parent = parent.parent
-                        if valor_encontrado: break
+                    valor_encontrado = self._buscar_valor_indicador(html_content, nome_indicador)
                     
                     if valor_encontrado:
                         self._process_and_store_data(dados, chave_json, valor_encontrado)
                     
-                    if chave_json == "statusInvest_cotacao" and dados[chave_json] is None:
-                        cotacao_elem = soup.find("div", title="Valor atual")
-                        if cotacao_elem:
-                            val = cotacao_elem.find("strong", class_="value")
-                            if val: self._process_and_store_data(dados, chave_json, val.get_text())
-                except: continue
+                except Exception as e_ind:
+                    continue
 
+            # Extração de recompra
             dados_recompra = self._extrair_dados_recompra(soup)
             for k, v in dados_recompra.items():
                 self._process_and_store_data(dados, k, v, overwrite=True)
 
-            # Define timezone BR e formato com hora
+            # Define timezone BR
             br_tz = pytz.timezone('America/Sao_Paulo')
             dados["statusInvest_data_atualizacao"] = datetime.now(br_tz).strftime("%Y-%m-%d %H:%M:%S")
             dados["statusInvest_fonte"] = fonte
