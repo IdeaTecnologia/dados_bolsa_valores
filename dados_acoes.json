@@ -1,11 +1,11 @@
 [
     {
         "ticker": "KEPL3",
-        "statusInvest_cotacao": 9.61,
+        "statusInvest_cotacao": 9.64,
         "statusInvest_min_52_semanas": 6.7,
         "statusInvest_max_52_semanas": 10.45,
         "statusInvest_dy_percentual": 8.67,
-        "statusInvest_valorizacao_12m_percentual": 5.93,
+        "statusInvest_valorizacao_12m_percentual": 5.71,
         "statusInvest_pl": 12.22,
         "statusInvest_peg_ratio": -0.28,
         "statusInvest_pvp": 2.29,
@@ -52,18 +52,18 @@
         "statusInvest_recompra_inicio": "25/03/2024",
         "statusInvest_recompra_fim": "25/03/2025",
         "statusInvest_recompra_quantidade": null,
-        "statusInvest_data_atualizacao": "2026-02-18 13:40:50",
+        "statusInvest_data_atualizacao": "2026-02-18 13:45:21",
         "statusInvest_fonte": "Atualização Manual Local",
         "statusInvest_erro": "",
-        "atualizado_em": "2026-02-18 13:40:50"
+        "atualizado_em": "2026-02-18 13:45:21"
     },
     {
         "ticker": "ABEV3",
-        "statusInvest_cotacao": 16.28,
+        "statusInvest_cotacao": 16.32,
         "statusInvest_min_52_semanas": 10.66,
         "statusInvest_max_52_semanas": 16.52,
         "statusInvest_dy_percentual": 6.84,
-        "statusInvest_valorizacao_12m_percentual": 52.91,
+        "statusInvest_valorizacao_12m_percentual": 53.28,
         "statusInvest_pl": 16.02,
         "statusInvest_peg_ratio": 1.07,
         "statusInvest_pvp": 2.79,
@@ -110,18 +110,18 @@
         "statusInvest_recompra_inicio": "30/10/2024",
         "statusInvest_recompra_fim": "30/04/2026",
         "statusInvest_recompra_quantidade": null,
-        "statusInvest_data_atualizacao": "2026-02-18 13:40:54",
+        "statusInvest_data_atualizacao": "2026-02-18 13:45:25",
         "statusInvest_fonte": "Atualização Manual Local",
         "statusInvest_erro": "",
-        "atualizado_em": "2026-02-18 13:40:54"
+        "atualizado_em": "2026-02-18 13:45:25"
     },
     {
         "ticker": "ITSA4",
-        "statusInvest_cotacao": 14.67,
+        "statusInvest_cotacao": 14.64,
         "statusInvest_min_52_semanas": 8.67,
         "statusInvest_max_52_semanas": 15,
         "statusInvest_dy_percentual": 7.97,
-        "statusInvest_valorizacao_12m_percentual": 62.89,
+        "statusInvest_valorizacao_12m_percentual": 63.11,
         "statusInvest_pl": 10.33,
         "statusInvest_peg_ratio": 0.78,
         "statusInvest_pvp": 1.78,
@@ -168,9 +168,9 @@
         "statusInvest_recompra_inicio": "16/05/2023",
         "statusInvest_recompra_fim": "16/11/2024",
         "statusInvest_recompra_quantidade": null,
-        "statusInvest_data_atualizacao": "2026-02-18 13:40:58",
+        "statusInvest_data_atualizacao": "2026-02-18 13:45:29",
         "statusInvest_fonte": "Atualização Manual Local",
         "statusInvest_erro": "",
-        "atualizado_em": "2026-02-18 13:40:58"
+        "atualizado_em": "2026-02-18 13:45:29"
     }
 ]
