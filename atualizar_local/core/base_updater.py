@@ -30,6 +30,28 @@ class BaseUpdater(ABC):
     def get_scraper_class(self):
         """Retorna a classe do scraper a ser usado."""
         pass
+
+
+    # Pode ser sobrescrito
+    def processar_ticker(self, ticker, dados_antigos):
+        """
+        Processa um ticker e retorna os dados mesclados.
+        Pode ser sobrescrito para lógicas específicas.
+        """
+        scraper_class = self.get_scraper_class()
+        scraper = scraper_class(ticker)
+        dados_novos = scraper.fetch_data()
+        
+        # Adicionar timestamp
+        from datetime import datetime
+        import pytz
+        tz_brasilia = pytz.timezone('America/Sao_Paulo')
+        dados_novos['atualizado_em'] = datetime.now(tz_brasilia).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Mesclar: dados antigos + novos
+        dados_mesclados = {**dados_antigos, **dados_novos}
+        return dados_mesclados
+    
     
     def executar(self, tickers_teste=None):
         """Executa o fluxo completo de atualização."""
@@ -68,18 +90,11 @@ class BaseUpdater(ABC):
             dados_antigos = dados_existentes_map.get(ticker, {})
             
             try:
-                scraper = scraper_class(ticker)
-                dados_novos = scraper.fetch_data()
-                
-                # ADICIONAR: timestamp de atualização
-                tz_brasilia = pytz.timezone('America/Sao_Paulo')
-                dados_novos['atualizado_em'] = datetime.now(tz_brasilia).strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Mesclar: dados antigos + novos
-                dados_mesclados = {**dados_antigos, **dados_novos}
+                dados_mesclados = self.processar_ticker(ticker, dados_antigos)
                 dados_finais.append(dados_mesclados)
                 
                 print(f"✅ {ticker}: {self.nome_site} atualizado")
+                
                 
             except Exception as e:
                 print(f"❌ Erro em {ticker}: {e}")
