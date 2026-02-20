@@ -1,4 +1,5 @@
 import subprocess
+import sys
 import pytz
 from datetime import datetime
 
@@ -13,12 +14,10 @@ class GitManager:
             print(f"CMD: {' '.join(comando)}")
             
             if mostrar_output:
-                # Permite interação (ex: senha do git push)
-                subprocess.run(comando, check=True, text=True)
+                subprocess.run(comando, check=True, text=True, encoding='utf-8')
             else:
-                # Silencia a saída (evita looping de JSON gigante)
                 subprocess.run(comando, check=True, text=True, 
-                             capture_output=True)
+                            capture_output=True, encoding='utf-8')
             return True
         except subprocess.CalledProcessError as e:
             print(f"❌ {mensagem_erro}")
@@ -29,14 +28,26 @@ class GitManager:
     def pull(self):
         """Faz git pull. Se falhar, interrompe a execução."""
         print("\n🔄 Sincronizando com GitHub (Git Pull)...")
-        if not self.executar_comando(["git", "pull"], 
-                                     "Falha no Git Pull", 
-                                     mostrar_output=True):  # Mostra output do pull
-            print("❌ ERRO CRÍTICO: Não foi possível sincronizar com GitHub.")
-            print("   Isso é obrigatório para não perder dados!")
-            print("   Verifique sua conexão e tente novamente.")
-            raise Exception("Git Pull falhou")
+        
+        # Verificar conexão primeiro
+        try:
+            subprocess.run(["git", "ls-remote", "origin"], 
+                        check=True, 
+                        capture_output=True, 
+                        timeout=10)
+        except:
+            print("❌ ERRO CRÍTICO: Sem conexão com GitHub!")
+            print("   Git Pull é OBRIGATÓRIO para não perder dados!")
+            sys.exit(1)  # ← FORÇA SAÍDA do programa
+        
+        if not self.executar_comando(["git", "pull", "origin", "main"], 
+                                    "Falha no Git Pull", 
+                                    mostrar_output=True):
+            print("❌ ERRO CRÍTICO: Git Pull falhou!")
+            sys.exit(1)  # ← FORÇA SAÍDA
+        
         print("✅ Sincronizado com GitHub")
+
     
     def push(self, arquivos, mensagem_commit):
         """Faz git add, commit e push se houver mudanças."""
@@ -68,9 +79,11 @@ class GitManager:
                 return False
             
             # Git push (mostra output - pode pedir senha)
-            if not self.executar_comando(["git", "push"], 
+            if not self.executar_comando(["git", "push", "origin", "main"],
                                         "Erro no push",
-                                        mostrar_output=True):  # ← Mostra output
+                                        mostrar_output=True):
+                print("⚠️ ATENÇÃO: Dados salvos localmente (commit feito)")
+                print("   Execute 'git push origin main' manualmente quando a conexão voltar.")
                 return False
             
             print("✅ Alterações enviadas com sucesso!")

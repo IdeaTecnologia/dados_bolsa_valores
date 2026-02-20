@@ -46,7 +46,7 @@ class BaseUpdater(ABC):
         # 2. CARREGAR DADOS EXISTENTES
         print(f"\n[2/4] Carregando dados existentes...")
         dados_existentes_map = self.json_manager.carregar_dados_existentes()
-        
+
         # 3. OBTER LISTA DE TICKERS
         if tickers_teste:
             acoes = tickers_teste
