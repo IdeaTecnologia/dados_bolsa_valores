@@ -82,16 +82,16 @@ def main():
             print("⚠️ Cota de API esgotada anteriormente. Usando dados antigos.")
             usar_scraper_status = False
         
-        # Cenário B: Temos dados antigos. Vamos ver se são recentes.
+        # Cenário B: Temos dados antigos. Vamos ver se são recentes (<=5) dias.
         elif dados_antigos:
             data_att_str = dados_antigos.get('statusInvest_data_atualizacao')
             if data_att_str:
                 try:
-                    # CORREÇÃO AQUI: Pegamos apenas os 10 primeiros caracteres (YYYY-MM-DD)
+                    # egamos apenas os 10 primeiros caracteres (YYYY-MM-DD)
                     # Isso funciona se tiver hora ("2025-12-01 10:00:00") ou não ("2025-12-01")
                     data_str_limpa = data_att_str[:10] 
                     data_att = datetime.strptime(data_str_limpa, "%Y-%m-%d")
-                    
+                    1
                     dias_passados = (datetime.now() - data_att).days
                     
                     if dias_passados < DIAS_VALIDADE_CACHE:

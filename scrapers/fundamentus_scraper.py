@@ -78,8 +78,9 @@ class FundamentusScraper:
     def __init__(self, ticker):
         self.ticker = ticker
         self.url = f"https://www.fundamentus.com.br/detalhes.php?papel={self.ticker.upper()}"
+        
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
         }
 
     def _get_all_possible_keys(self):
