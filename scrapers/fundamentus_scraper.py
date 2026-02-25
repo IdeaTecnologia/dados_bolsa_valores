@@ -77,10 +77,21 @@ NON_NUMERIC_KEYS = {
 class FundamentusScraper:
     def __init__(self, ticker):
         self.ticker = ticker
-        self.url = f"https://www.fundamentus.com.br/detalhes.php?papel={self.ticker.upper()}"
+        # self.url = f"https://www.fundamentus.com.br/detalhes.php?papel={self.ticker.upper()}"
         
+        # self.headers = {
+        #     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+
+        # Faz o scraper utilizando API própria no Google Apps Script para evitar bloqueios e CAPTCHAs do site do Fundamentus.
+        url_google = "https://script.google.com/macros/s/AKfycbwYlDsCfXl_c5Rwkh8Eg0_Q6w4MLinMCXvxN3uYUNhwoHGv2CANdkaU--njSacEoLI24g/exec"
+        
+        # A nova URL passa o ticker como parâmetro para o Google
+        self.url = f"{url_google}?ticker={self.ticker.upper()}"
+        
+        # Como o Google não tem Cloudflare, o User-Agent aqui agora é irrelevante, mas mantemos para evitar bugs.
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
+
         }
 
     def _get_all_possible_keys(self):
