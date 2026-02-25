@@ -77,21 +77,22 @@ NON_NUMERIC_KEYS = {
 class FundamentusScraper:
     def __init__(self, ticker):
         self.ticker = ticker
-        # self.url = f"https://www.fundamentus.com.br/detalhes.php?papel={self.ticker.upper()}"
+        self.url = f"https://www.fundamentus.com.br/detalhes.php?papel={self.ticker.upper()}"
         
-        # self.headers = {
-        #     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-
-        # Faz o scraper utilizando API própria no Google Apps Script para evitar bloqueios e CAPTCHAs do site do Fundamentus.
-        url_google = "https://script.google.com/macros/s/AKfycbwYlDsCfXl_c5Rwkh8Eg0_Q6w4MLinMCXvxN3uYUNhwoHGv2CANdkaU--njSacEoLI24g/exec"
-        
-        # A nova URL passa o ticker como parâmetro para o Google
-        self.url = f"{url_google}?ticker={self.ticker.upper()}"
-        
-        # Como o Google não tem Cloudflare, o User-Agent aqui agora é irrelevante, mas mantemos para evitar bugs.
+        # Pacote completo de cabeçalhos de um navegador real
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
-
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "document",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Site": "cross-site",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+            "Referer": "https://www.google.com/" # Truque: finge que a visita veio de uma pesquisa no Google
         }
 
     def _get_all_possible_keys(self):
