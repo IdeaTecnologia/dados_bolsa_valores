@@ -116,7 +116,6 @@ class FundamentusScraper:
         for tentativa in range(max_tentativas):
             try:
                 time.sleep(1 * (tentativa + 1))
-                # response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome120", timeout=20)
 
                 response = curl_requests.get(
                     self.url, 

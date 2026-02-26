@@ -56,6 +56,6 @@ class ListaTicker:
         """
         Retorna a lista de tickers que foi carregada durante a inicialização.
         """
-        # return self.lista_ticker
-        return ["AALR3", "ABCB4", "ABEV3"] # <--- Para testes rápidos, descomente esta linha e comente o return acima.  
+        return self.lista_ticker
+        # return ["AALR3", "ABCB4", "ABEV3"] # <--- Para testes rápidos, descomente esta linha e comente o return acima.  
     
