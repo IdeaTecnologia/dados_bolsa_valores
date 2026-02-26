@@ -79,20 +79,20 @@ class FundamentusScraper:
         self.ticker = ticker
         self.url = f"https://www.fundamentus.com.br/detalhes.php?papel={self.ticker.upper()}"
         
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-            "Sec-Ch-Ua-Mobile": "?0",
-            "Sec-Ch-Ua-Platform": '"Windows"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "cross-site",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
-            "Referer": "https://www.google.com/"
-        }
+        # self.headers = {
+        #     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        #     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        #     "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        #     "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        #     "Sec-Ch-Ua-Mobile": "?0",
+        #     "Sec-Ch-Ua-Platform": '"Windows"',
+        #     "Sec-Fetch-Dest": "document",
+        #     "Sec-Fetch-Mode": "navigate",
+        #     "Sec-Fetch-Site": "cross-site",
+        #     "Sec-Fetch-User": "?1",
+        #     "Upgrade-Insecure-Requests": "1",
+        #     "Referer": "https://www.google.com/"
+        # }
 
     def _get_all_possible_keys(self):
         """Gera uma lista com todas as chaves de dados possíveis para este scraper."""
@@ -116,8 +116,16 @@ class FundamentusScraper:
         for tentativa in range(max_tentativas):
             try:
                 time.sleep(1 * (tentativa + 1))
-                response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome120", timeout=20)
+                # response = curl_requests.get(self.url, headers=self.headers, impersonate="chrome120", timeout=20)
+
+                response = curl_requests.get(
+                    self.url, 
+                    impersonate="safari15_3", 
+                    timeout=20
+                )
+
                 if "captcha" in response.text.lower(): raise Exception("Bloqueado por CAPTCHA")
+
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
                 ano_atual = datetime.now().year
